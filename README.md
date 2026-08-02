@@ -29,7 +29,7 @@ The same setup can be done from this linked project with:
 
 ```powershell
 vercel env add CREATE_PASSWORD production
-vercel integration add upstash/upstash-kv --plan free --environment production --metadata primaryRegion=sfo1 --metadata autoUpgrade=false
+vercel integration add upstash/upstash-kv --plan free --environment production --metadata primaryRegion=iad1 --metadata autoUpgrade=false
 vercel --prod
 ```
 
