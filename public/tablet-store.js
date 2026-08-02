@@ -1,0 +1,41 @@
+const LEGACY_STORAGE_KEY = 'noita-riddle-tablets.v1';
+const REVEAL_STORAGE_KEY = 'riddle-tablet-reveals.v1';
+
+function clean(value, maxLength) {
+    return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+export function loadLegacyTablets() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) || '[]');
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map((value) => ({
+            id: clean(value && value.id, 120),
+            topic: clean(value && value.topic, 120),
+            author: clean(value && value.author, 120),
+            riddle: clean(value && value.riddle, 2000)
+        })).filter((value) => value.id && value.topic && value.author && value.riddle);
+    } catch {
+        return [];
+    }
+}
+
+export function clearLegacyTablets() {
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+}
+
+export function loadRevealedTabletIds() {
+    try {
+        const ids = JSON.parse(localStorage.getItem(REVEAL_STORAGE_KEY) || '[]');
+        return new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : []);
+    } catch {
+        return new Set();
+    }
+}
+
+export function markTabletRevealed(id) {
+    if (typeof id !== 'string' || !id) return;
+    const ids = loadRevealedTabletIds();
+    ids.add(id);
+    localStorage.setItem(REVEAL_STORAGE_KEY, JSON.stringify([...ids]));
+}

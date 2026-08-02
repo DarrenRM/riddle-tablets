@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Scribe's Chamber</title>
+    <link rel="stylesheet" href="/style.css?v=1">
+</head>
+<body class="login-page">
+    <main class="login-shell">
+        <p class="eyebrow">The scribe's chamber</p>
+        <h1>Speak the Word</h1>
+        <p class="subtitle">Only invited scribes may enter.</p>
+        <form id="create-login-form" class="login-form">
+            <label for="create-password">Password</label>
+            <input id="create-password" type="password" required autofocus autocomplete="current-password">
+            <button type="submit">Enter</button>
+            <p id="login-status" role="alert" aria-live="polite"></p>
+        </form>
+    </main>
+    <script type="module" src="/create-login.js?v=1"></script>
+</body>
+</html>

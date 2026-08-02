@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inscribe a Tablet</title>
+    <link rel="stylesheet" href="/style.css?v=1">
+</head>
+<body class="create-page">
+    <div class="create-container">
+        <header>
+            <p class="eyebrow">The scribe's chamber</p>
+            <h1>Inscribe a Tablet</h1>
+            <p class="subtitle">Shape a mystery for the archive.</p>
+        </header>
+        <main>
+            <div id="save-toast" class="save-toast" role="status" aria-live="polite"></div>
+            <form id="tablet-form" class="inscription-form">
+                <input id="tablet-id" type="hidden">
+                <div class="form-field">
+                    <label for="topic-input">Topic</label>
+                    <input id="topic-input" name="topic" type="text" maxlength="120" required autocomplete="off">
+                </div>
+                <div class="form-field">
+                    <label for="author-input">Author</label>
+                    <input id="author-input" name="author" type="text" maxlength="120" required autocomplete="off">
+                </div>
+                <div class="form-field">
+                    <label for="riddle-input">Riddle</label>
+                    <textarea id="riddle-input" name="riddle" rows="7" maxlength="2000" required></textarea>
+                </div>
+                <div class="form-actions">
+                    <button id="save-tablet-btn" type="submit">Save Tablet</button>
+                    <button id="cancel-edit-btn" class="secondary-button hidden" type="button">Cancel edit</button>
+                    <span id="form-status" role="status" aria-live="polite"></span>
+                </div>
+            </form>
+            <section class="saved-section" aria-labelledby="saved-heading">
+                <div class="section-heading-row">
+                    <div>
+                        <p class="eyebrow">The archive remembers</p>
+                        <h2 id="saved-heading">Saved Tablets</h2>
+                    </div>
+                    <a href="/" class="text-link">View tablets</a>
+                </div>
+                <div id="saved-tablets" class="saved-tablets"></div>
+                <p id="saved-empty" class="saved-empty">No tablets have been saved yet.</p>
+            </section>
+        </main>
+    </div>
+    <script type="module" src="/create.js?v=1"></script>
+</body>
+</html>
