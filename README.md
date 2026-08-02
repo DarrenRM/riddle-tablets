@@ -25,6 +25,16 @@ Without Upstash credentials, local edits persist to the ignored `data/tablets.lo
 3. Add `CREATE_PASSWORD` as a sensitive environment variable for Production and Preview.
 4. Redeploy after changing environment variables.
 
+The same setup can be done from this linked project with:
+
+```powershell
+vercel env add CREATE_PASSWORD production
+vercel integration add upstash/upstash-kv --plan free --environment production --metadata primaryRegion=sfo1 --metadata autoUpgrade=false
+vercel --prod
+```
+
+The integration command creates an external Upstash resource. Review the selected account and region before running it.
+
 The public page exposes no editor or navigation link. `/create` is protected by a rate-limited password exchange and an HTTP-only, SameSite=Strict cookie. Opened tablet IDs stay in each visitor's local storage; tablet content is shared through Upstash.
 
 ## Commands
