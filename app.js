@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const path = require('path');
 const dotenv = require('dotenv');
 const express = require('express');
-const { createDefaultTabletRepository } = require('./lib/tablet-repository');
+const { createDefaultTabletRepository, resolveRedisCredentials } = require('./lib/tablet-repository');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
@@ -175,7 +175,7 @@ function createApp(options = {}) {
         status: 'ok',
         tablet_count: (await repository.list()).length,
         create_password_configured: Boolean(config.createPassword),
-        shared_storage: Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
+        shared_storage: Boolean(resolveRedisCredentials())
       });
     } catch (error) {
       next(error);

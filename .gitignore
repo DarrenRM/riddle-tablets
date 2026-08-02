@@ -1,6 +1,7 @@
 node_modules/
 .env
 .env.local
+.env*.local
 .vercel/
 data/tablets.local.json
 server.stdout.log

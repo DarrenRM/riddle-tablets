@@ -21,7 +21,7 @@ Without Upstash credentials, local edits persist to the ignored `data/tablets.lo
 ## Vercel deployment
 
 1. Import or deploy this repository as a Vercel project. The root `index.js` exports the Express application Vercel detects.
-2. In Vercel Marketplace, install Upstash Redis and connect it to this project. It supplies `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN`.
+2. In Vercel Marketplace, install Upstash Redis and connect it to this project. Current Vercel integrations supply `KV_REST_API_URL` and `KV_REST_API_TOKEN`; direct Upstash credentials named `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are also supported.
 3. Add `CREATE_PASSWORD` as a sensitive environment variable for Production and Preview.
 4. Redeploy after changing environment variables.
 

@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const test = require('node:test');
 const { createApp } = require('../app');
-const { MemoryTabletRepository } = require('../lib/tablet-repository');
+const { MemoryTabletRepository, resolveRedisCredentials } = require('../lib/tablet-repository');
 
 async function request(app, method, route, body, extraHeaders = {}) {
   const server = await new Promise((resolve) => {
@@ -77,4 +77,16 @@ test('the editor is gated and authenticated writes are publicly readable', async
 test('tablet validation rejects incomplete records', async () => {
   const repository = new MemoryTabletRepository();
   await assert.rejects(() => repository.save({ topic: 'Missing fields' }), /all required/i);
+});
+
+test('shared storage accepts both Upstash and Vercel KV environment names', () => {
+  assert.deepEqual(resolveRedisCredentials({
+    UPSTASH_REDIS_REST_URL: 'https://upstash.example',
+    UPSTASH_REDIS_REST_TOKEN: 'upstash-token'
+  }), { url: 'https://upstash.example', token: 'upstash-token' });
+
+  assert.deepEqual(resolveRedisCredentials({
+    KV_REST_API_URL: 'https://kv.example',
+    KV_REST_API_TOKEN: 'kv-token'
+  }), { url: 'https://kv.example', token: 'kv-token' });
 });
