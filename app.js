@@ -195,4 +195,10 @@ function createApp(options = {}) {
   return app;
 }
 
-module.exports = { RateLimiter, createApp };
+// Vercel recognizes app.js as an Express entry point, so its default CommonJS
+// export must be the server itself. Attach the factory for local tests/tools.
+const defaultApp = createApp();
+defaultApp.RateLimiter = RateLimiter;
+defaultApp.createApp = createApp;
+
+module.exports = defaultApp;
