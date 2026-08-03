@@ -1,5 +1,6 @@
 const LEGACY_STORAGE_KEY = 'noita-riddle-tablets.v1';
 const REVEAL_STORAGE_KEY = 'riddle-tablet-reveals.v1';
+const COMPLETE_STORAGE_KEY = 'riddle-tablet-completions.v1';
 
 function clean(value, maxLength) {
     return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
@@ -43,4 +44,21 @@ export function setTabletRevealed(id, isRevealed) {
     if (isRevealed) ids.add(id);
     else ids.delete(id);
     localStorage.setItem(REVEAL_STORAGE_KEY, JSON.stringify([...ids]));
+}
+
+export function loadCompletedTabletIds() {
+    try {
+        const ids = JSON.parse(localStorage.getItem(COMPLETE_STORAGE_KEY) || '[]');
+        return new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : []);
+    } catch {
+        return new Set();
+    }
+}
+
+export function setTabletCompleted(id, isCompleted) {
+    if (typeof id !== 'string' || !id) return;
+    const ids = loadCompletedTabletIds();
+    if (isCompleted) ids.add(id);
+    else ids.delete(id);
+    localStorage.setItem(COMPLETE_STORAGE_KEY, JSON.stringify([...ids]));
 }

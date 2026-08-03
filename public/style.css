@@ -101,7 +101,21 @@ button:disabled {
     box-shadow: 0 15px 42px rgba(0, 0, 0, 0.52), 0 0 20px rgba(71, 226, 136, 0.12);
 }
 
-.riddle-tablet:focus-visible {
+.tablet-toggle {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: center;
+}
+
+.tablet-toggle:focus-visible,
+.tablet-open-prompt:focus-visible {
     outline: 2px solid var(--gold);
     outline-offset: 4px;
 }
@@ -199,9 +213,13 @@ button:disabled {
 
 .tablet-open-prompt {
     display: block;
+    width: 100%;
     max-height: 2.5rem;
     margin-top: 1.3rem;
+    padding: 0;
     overflow: hidden;
+    border: 0;
+    background: transparent;
     color: #555563;
     font-family: 'NoitaPixel', monospace;
     font-size: 0.62rem;
@@ -218,15 +236,51 @@ button:disabled {
 }
 
 .revealed .tablet-open-prompt {
-    max-height: 0;
-    margin-top: 0;
-    opacity: 0;
-    pointer-events: none;
+    color: var(--green);
     animation: none;
+}
+
+.completed .tablet-open-prompt {
+    color: var(--purple);
+    animation: none;
+}
+
+.tablet-open-prompt:disabled {
+    cursor: default;
+    opacity: 1;
+}
+
+.riddle-tablet.changing-section {
+    opacity: 0;
+    transform: scale(0.98);
+    pointer-events: none;
+    transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .riddle-author-name {
     color: #c3c1cb;
+}
+
+.completed-section {
+    margin-top: 4rem;
+    padding-top: 2.2rem;
+    border-top: 1px solid rgba(168, 102, 255, 0.2);
+}
+
+.completed-section h2 {
+    margin-bottom: 1.5rem;
+    color: #777384;
+    font-family: 'NoitaPixel', monospace;
+    font-size: 0.72rem;
+    font-weight: normal;
+    letter-spacing: 0.14em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.completed-section .riddle-tablet {
+    border-color: rgba(168, 102, 255, 0.42);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.34), inset 0 0 28px rgba(168, 102, 255, 0.025);
 }
 
 @keyframes inscription-breathe {

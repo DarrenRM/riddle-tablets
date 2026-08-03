@@ -13,7 +13,7 @@ const chromeCandidates = [
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
 ];
 
-test('save, edit, compact accordion reveal, glyph flicker, and local reveal restoration work', { timeout: 60000 }, async (t) => {
+test('save, edit, masonry reveal, and local reveal/completion state work', { timeout: 60000 }, async (t) => {
   const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
   if (!executablePath) return t.skip('No supported local Chromium browser was found.');
   const app = createApp({
@@ -54,7 +54,7 @@ test('save, edit, compact accordion reveal, glyph flicker, and local reveal rest
     await save('Time', 'Last Scribe', 'I am held by none.');
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
-    const cards = page.locator('.riddle-tablet');
+    const cards = page.locator('#tablet-grid .riddle-tablet');
     assert.equal(await cards.count(), 5);
     const boxes = await Promise.all(Array.from({ length: 4 }, (_, index) => cards.nth(index).boundingBox()));
     assert.ok(boxes.every((box) => box && Math.abs(box.y - boxes[0].y) < 1));
@@ -79,7 +79,7 @@ test('save, edit, compact accordion reveal, glyph flicker, and local reveal rest
       { timeout: 8500 }
     );
 
-    await cards.nth(2).click();
+    await cards.nth(2).locator('.tablet-toggle').click();
     await cards.nth(2).evaluate((element) => new Promise((resolve) => {
       const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);
       done();
@@ -91,10 +91,10 @@ test('save, edit, compact accordion reveal, glyph flicker, and local reveal rest
     assert.ok(longBox.height > 700);
     assert.ok(Math.abs(fifthAfterLongReveal.y - (firstAfterLongReveal.y + firstAfterLongReveal.height + gridGap)) < 2);
     assert.ok(fifthAfterLongReveal.y < longBox.y + longBox.height - 300);
-    await cards.nth(2).click();
+    await cards.nth(2).locator('.tablet-toggle').click();
     await page.waitForTimeout(700);
 
-    await cards.first().click();
+    await cards.first().locator('.tablet-toggle').click();
     await cards.first().evaluate((element) => new Promise((resolve) => {
       const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);
       done();
@@ -105,18 +105,10 @@ test('save, edit, compact accordion reveal, glyph flicker, and local reveal rest
       await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).display),
       'block'
     );
-    await cards.first().locator('.tablet-open-prompt').evaluate((element) => new Promise((resolve) => {
-      const settled = () => parseFloat(getComputedStyle(element).maxHeight) < 0.5
-        ? resolve()
-        : requestAnimationFrame(settled);
-      settled();
-    }));
-    assert.ok(
-      parseFloat(await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).maxHeight)) < 0.5
-    );
+    assert.equal(await cards.first().locator('.tablet-open-prompt').textContent(), 'Mark as complete');
     assert.equal(
       await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).opacity),
-      '0'
+      '1'
     );
     assert.equal(
       await cards.first().locator('.riddle-topic').evaluate((element) => getComputedStyle(element).fontSize),
@@ -125,14 +117,34 @@ test('save, edit, compact accordion reveal, glyph flicker, and local reveal rest
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.riddle-tablet').first().getAttribute('aria-expanded'), 'true');
     assert.match(await page.locator('.riddle-tablet').first().locator('.riddle-text').textContent(), /held by none/i);
-    await page.locator('.riddle-tablet').first().click();
+    await page.locator('#tablet-grid .riddle-tablet').first().locator('.tablet-toggle').click();
     await page.waitForTimeout(700);
     assert.equal(await page.locator('.riddle-tablet').first().getAttribute('aria-expanded'), 'false');
     const reclosedBox = await page.locator('.riddle-tablet').first().boundingBox();
     assert.ok(reclosedBox.height < openBox.height);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.riddle-tablet').first().getAttribute('aria-expanded'), 'false');
-    assert.equal(await page.locator('.riddle-tablet').first().locator('.riddle-text').textContent(), '');
+    assert.equal(await page.locator('#tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#tablet-grid .riddle-tablet').first().locator('.riddle-text').textContent(), '');
+
+    await page.locator('#tablet-grid .riddle-tablet').first().locator('.tablet-toggle').click();
+    await page.locator('#tablet-grid .riddle-tablet').first().evaluate((element) => new Promise((resolve) => {
+      const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);
+      done();
+    }));
+    await page.locator('#tablet-grid .riddle-tablet').first().getByRole('button', { name: 'Mark as complete' }).click();
+    await page.locator('#completed-tablet-grid .riddle-tablet').waitFor();
+    assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 4);
+    assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 1);
+    assert.equal(await page.locator('#completed-tablet-grid .riddle-topic').textContent(), 'Time');
+    assert.equal(
+      await page.locator('#completed-tablet-grid .tablet-open-prompt').textContent(),
+      'Return to active'
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 1);
+    await page.locator('#completed-tablet-grid .riddle-tablet').getByRole('button', { name: 'Return to active' }).click();
+    await page.waitForFunction(() => document.querySelectorAll('#tablet-grid .riddle-tablet').length === 5);
+    assert.equal(await page.locator('#completed-section').isHidden(), true);
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));
