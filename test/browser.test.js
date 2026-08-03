@@ -75,12 +75,16 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     assert.ok(Math.abs(fifthClosedBox.x - boxes[0].x) < 1);
     assert.ok(Math.abs(fifthClosedBox.y - (boxes[0].y + boxes[0].height + gridGap)) < 2);
     assert.equal(await cards.first().getAttribute('aria-expanded'), 'false');
-    const sealOffset = await cards.first().evaluate((card) => {
+    const sealOffsets = await cards.evaluateAll((tabletCards) => tabletCards.slice(0, 4).map((card) => {
       const cardBox = card.getBoundingClientRect();
       const sealBox = card.querySelector('.tablet-seal').getBoundingClientRect();
-      return (sealBox.left + sealBox.width / 2) - (cardBox.left + cardBox.width / 2);
-    });
-    assert.ok(Math.abs(sealOffset + 1.6) < 0.5);
+      const borderCenterY = cardBox.top + parseFloat(getComputedStyle(card).borderTopWidth) / 2;
+      return {
+        x: (sealBox.left + sealBox.width / 2) - (cardBox.left + cardBox.width / 2),
+        y: (sealBox.top + sealBox.height / 2) - borderCenterY
+      };
+    }));
+    assert.ok(sealOffsets.every(({ x, y }) => Math.abs(x) < 0.1 && Math.abs(y) < 0.1));
     const closedBox = await cards.first().boundingBox();
     assert.ok(closedBox.height < 220);
     assert.notEqual(
