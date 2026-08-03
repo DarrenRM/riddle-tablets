@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tabletMoved: false,
             ancientTrack: ancientTracks[Math.random() < 0.5 ? 0 : 1]
         };
-        const showGameOver = Math.random() < 0.5;
+        const showGameOver = Math.random() < 0.2;
         activeCelebration = session;
         celebration.classList.remove('dismissible');
         completionTitle.classList.remove('rolling', 'success');

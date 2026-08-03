@@ -145,7 +145,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
       await completeButton.evaluate((element) => getComputedStyle(element).color),
       'rgb(240, 192, 64)'
     );
-    await page.evaluate(() => { Math.random = () => 0.25; });
+    await page.evaluate(() => { Math.random = () => 0.1; });
     await completeButton.click();
     await page.locator('#completion-celebration[data-phase="game-over"]').waitFor();
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Game Over');
