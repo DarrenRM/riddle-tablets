@@ -297,7 +297,47 @@ button:disabled {
 .completion-celebration.visible {
     visibility: visible;
     opacity: 1;
+    pointer-events: auto;
     transition: opacity 180ms ease, visibility 0s;
+}
+
+.completion-celebration.visible.dismissible {
+    cursor: pointer;
+}
+
+.completion-close {
+    position: absolute;
+    z-index: 2;
+    top: clamp(1rem, 3vw, 2rem);
+    right: clamp(1rem, 3vw, 2rem);
+    width: 3rem;
+    height: 3rem;
+    border: 1px solid rgba(240, 192, 64, 0.38);
+    border-radius: 50%;
+    color: #aaa5b2;
+    font-family: Arial, sans-serif;
+    font-size: 2rem;
+    font-weight: 200;
+    line-height: 1;
+    opacity: 0;
+    pointer-events: none;
+    background: rgba(9, 8, 14, 0.58);
+    transform: scale(0.82);
+    transition: color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, opacity 200ms ease, transform 200ms ease;
+}
+
+.completion-celebration.dismissible .completion-close {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+}
+
+.completion-close:hover,
+.completion-close:focus-visible {
+    border-color: var(--gold);
+    color: var(--gold);
+    box-shadow: 0 0 16px rgba(240, 192, 64, 0.24);
+    outline: none;
 }
 
 .completion-pulse,

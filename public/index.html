@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tablets</title>
     <link rel="preload" href="/audio/noita-game-over.mp3?v=2" as="audio" type="audio/mpeg">
-    <link rel="stylesheet" href="/style.css?v=12">
+    <link rel="preload" href="/audio/noita-ancient-01.mp3?v=1" as="audio" type="audio/mpeg">
+    <link rel="preload" href="/audio/noita-ancient-02.mp3?v=1" as="audio" type="audio/mpeg">
+    <link rel="stylesheet" href="/style.css?v=13">
 </head>
 <body class="archive-page">
     <main class="archive-container">
@@ -20,13 +22,15 @@
             <p>The archive waits in silence.</p>
         </section>
     </main>
-    <div id="completion-celebration" class="completion-celebration" aria-hidden="true">
+    <div id="completion-celebration" class="completion-celebration" role="dialog" aria-modal="true" aria-label="Inscription completed" aria-hidden="true">
+        <button id="completion-close" class="completion-close" type="button" aria-label="Close celebration">&times;</button>
         <span class="completion-pulse" aria-hidden="true"></span>
         <p id="completion-title" class="completion-title" role="status" aria-live="assertive"></p>
     </div>
     <audio id="completion-sound" preload="auto" aria-hidden="true">
         <source src="/audio/noita-game-over.mp3?v=2" type="audio/mpeg">
     </audio>
-    <script type="module" src="/gallery.js?v=9"></script>
+    <audio id="ancient-sound" preload="auto" aria-hidden="true"></audio>
+    <script type="module" src="/gallery.js?v=10"></script>
 </body>
 </html>

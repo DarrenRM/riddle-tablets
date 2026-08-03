@@ -139,6 +139,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
       await completeButton.evaluate((element) => getComputedStyle(element).color),
       'rgb(240, 192, 64)'
     );
+    await page.evaluate(() => { Math.random = () => 0.25; });
     await completeButton.click();
     await page.locator('#completion-celebration[data-phase="game-over"]').waitFor();
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Game Over');
@@ -167,10 +168,41 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     await page.locator('#completion-celebration[data-phase="success"]').waitFor({ timeout: 4000 });
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
     assert.equal(await page.locator('#completion-title .completion-letter').count(), 0);
+    assert.equal(await page.locator('#completion-celebration').evaluate((element) => element.classList.contains('dismissible')), true);
+    assert.equal(await page.locator('#completion-close').isVisible(), true);
+    assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 0);
+    await page.locator('#completion-sound').evaluate((audio) => {
+      audio.currentTime = Math.max(0, audio.duration - 0.12);
+    });
+    await page.waitForFunction(() => {
+      const audio = document.querySelector('#ancient-sound');
+      return audio.src.includes('noita-ancient-01.mp3') && !audio.paused && audio.currentTime > 0;
+    });
+    await page.locator('#completion-celebration').click({ position: { x: 20, y: 20 } });
     await page.locator('#completed-tablet-grid .riddle-tablet').waitFor();
+    assert.equal(await page.locator('#completion-celebration').getAttribute('aria-hidden'), 'true');
+    assert.equal(await page.locator('#completion-sound').evaluate((audio) => audio.paused && audio.currentTime === 0), true);
+    assert.equal(await page.locator('#ancient-sound').evaluate((audio) => audio.paused && audio.currentTime === 0), true);
     assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 4);
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 1);
+    await page.locator('#completed-tablet-grid .tablet-open-prompt').click();
+    await page.waitForFunction(() => document.querySelectorAll('#tablet-grid .riddle-tablet').length === 5);
+
+    await page.evaluate(() => { Math.random = () => 0.75; });
+    const directCompleteButton = page.locator('#tablet-grid .riddle-tablet').first().getByRole('button', { name: 'Mark as complete' });
+    await directCompleteButton.click();
+    await page.locator('#completion-celebration[data-phase="success"]').waitFor();
+    assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
+    assert.equal(await page.locator('#completion-sound').evaluate((audio) => audio.paused), true);
+    await page.waitForFunction(() => {
+      const audio = document.querySelector('#ancient-sound');
+      return audio.src.includes('noita-ancient-02.mp3') && !audio.paused && audio.currentTime > 0;
+    });
+    await page.locator('#completion-celebration.dismissible').waitFor();
+    await page.locator('#completion-close').click();
+    await page.locator('#completed-tablet-grid .riddle-tablet').waitFor();
+    assert.equal(await page.locator('#ancient-sound').evaluate((audio) => audio.paused && audio.currentTime === 0), true);
     await page.locator('#completed-tablet-grid .tablet-open-prompt').click();
     await page.waitForFunction(() => document.querySelectorAll('#tablet-grid .riddle-tablet').length === 5);
 

@@ -14,14 +14,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const empty = document.getElementById('archive-empty');
     const celebration = document.getElementById('completion-celebration');
     const completionTitle = document.getElementById('completion-title');
+    const completionClose = document.getElementById('completion-close');
     const completionSound = document.getElementById('completion-sound');
+    const ancientSound = document.getElementById('ancient-sound');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let currentTablets = [];
     let stopLayouts = () => {};
     let celebrationInProgress = false;
+    let activeCelebration = null;
 
     const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
     const scrambleCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const ancientTracks = [
+        '/audio/noita-ancient-01.mp3?v=1',
+        '/audio/noita-ancient-02.mp3?v=1'
+    ];
 
     function setCompletionWord(word) {
         completionTitle.textContent = word;
@@ -67,6 +74,49 @@ document.addEventListener('DOMContentLoaded', () => {
         setCompletionWord(to);
     }
 
+    function stopAudio(audio) {
+        audio.pause();
+        audio.currentTime = 0;
+    }
+
+    function playAncientTrack(session) {
+        if (activeCelebration !== session || session.dismissed) return;
+        ancientSound.src = session.ancientTrack;
+        ancientSound.currentTime = 0;
+        ancientSound.volume = 0.62;
+        ancientSound.play().catch(() => {});
+    }
+
+    function makeCelebrationDismissible(session) {
+        if (activeCelebration !== session || session.dismissed) return;
+        celebration.classList.add('dismissible');
+    }
+
+    async function dismissCelebration() {
+        const session = activeCelebration;
+        if (!session || session.dismissed || !celebration.classList.contains('dismissible')) return;
+        session.dismissed = true;
+        activeCelebration = null;
+        if (session.deathEndedHandler) {
+            completionSound.removeEventListener('ended', session.deathEndedHandler);
+        }
+        stopAudio(completionSound);
+        stopAudio(ancientSound);
+        celebration.classList.remove('visible', 'dismissible');
+        await delay(reduceMotion ? 10 : 300);
+        celebration.setAttribute('aria-hidden', 'true');
+        celebration.removeAttribute('data-phase');
+        completionTitle.classList.remove('rolling', 'success');
+
+        if (session.card.isConnected) {
+            session.card.classList.remove('celebrating');
+            session.card.classList.add('changing-section');
+            await delay(reduceMotion ? 0 : 180);
+        }
+        celebrationInProgress = false;
+        renderTablets(currentTablets);
+    }
+
     async function celebrateCompletion(tablet, card, prompt) {
         if (celebrationInProgress) return;
         celebrationInProgress = true;
@@ -74,36 +124,52 @@ document.addEventListener('DOMContentLoaded', () => {
         prompt.disabled = true;
         card.classList.add('celebrating');
 
+        const session = {
+            card,
+            dismissed: false,
+            deathEndedHandler: null,
+            ancientTrack: ancientTracks[Math.random() < 0.5 ? 0 : 1]
+        };
+        const showGameOver = Math.random() < 0.5;
+        activeCelebration = session;
+        celebration.classList.remove('dismissible');
         completionTitle.classList.remove('rolling', 'success');
-        setCompletionWord('Game Over');
-        celebration.dataset.phase = 'game-over';
         celebration.setAttribute('aria-hidden', 'false');
         celebration.classList.add('visible');
+
+        if (!showGameOver) {
+            setCompletionWord('Success');
+            completionTitle.classList.add('success');
+            celebration.dataset.phase = 'success';
+            playAncientTrack(session);
+            await delay(reduceMotion ? 0 : 520);
+            makeCelebrationDismissible(session);
+            return;
+        }
+
+        setCompletionWord('Game Over');
+        celebration.dataset.phase = 'game-over';
+        session.deathEndedHandler = () => playAncientTrack(session);
+        completionSound.addEventListener('ended', session.deathEndedHandler, { once: true });
         completionSound.currentTime = 0;
         completionSound.volume = 0.72;
-        completionSound.play().catch(() => {});
+        completionSound.play().catch(() => playAncientTrack(session));
 
         await delay(reduceMotion ? 350 : 1500);
+        if (activeCelebration !== session || session.dismissed) return;
         celebration.dataset.phase = 'scrambling';
         await morphCompletionWord('Game Over', 'Success');
+        if (activeCelebration !== session || session.dismissed) return;
         completionTitle.classList.add('success');
         celebration.dataset.phase = 'success';
-
-        await delay(reduceMotion ? 450 : 1000);
-        celebration.classList.remove('visible');
-        await delay(reduceMotion ? 10 : 300);
-        celebration.setAttribute('aria-hidden', 'true');
-        celebration.removeAttribute('data-phase');
-        completionTitle.classList.remove('success');
-
-        if (card.isConnected) {
-            card.classList.remove('celebrating');
-            card.classList.add('changing-section');
-            await delay(reduceMotion ? 0 : 180);
-        }
-        celebrationInProgress = false;
-        renderTablets(currentTablets);
+        makeCelebrationDismissible(session);
     }
+
+    completionClose.addEventListener('click', dismissCelebration);
+    celebration.addEventListener('click', dismissCelebration);
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') dismissCelebration();
+    });
 
     function installMasonry(targetGrid, cards) {
         let animationFrame = 0;
