@@ -110,7 +110,7 @@ button:disabled {
     position: absolute;
     top: -0.85rem;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translateX(calc(-50% + 3px));
     width: 1.7rem;
     color: var(--green);
     font-family: 'NoitaPixel', monospace;
