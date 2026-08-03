@@ -9,3 +9,4 @@ server.stderr.log
 artifacts/
 Noita Blackletter-Regular (new).zip
 *.obj
+tools/noita-audio-renderer/.build/

@@ -24,13 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const scrambleCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
     function setCompletionWord(word) {
-        completionTitle.replaceChildren(...Array.from(word, (character) => {
-            const letter = document.createElement('span');
-            letter.className = 'completion-letter';
-            letter.textContent = character === ' ' ? '\u00a0' : character;
-            letter.setAttribute('aria-hidden', 'true');
-            return letter;
-        }));
+        completionTitle.textContent = word;
         completionTitle.setAttribute('aria-label', word);
     }
 
@@ -54,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return letter;
         });
         completionTitle.replaceChildren(...letters);
+        completionTitle.classList.add('rolling');
 
         await Promise.all(letters.map(async (letter, index) => {
             await delay(index * 48);
@@ -68,7 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
             letter.style.opacity = character ? '1' : '0';
         }));
 
-        completionTitle.setAttribute('aria-label', to);
+        completionTitle.classList.remove('rolling');
+        setCompletionWord(to);
     }
 
     async function celebrateCompletion(tablet, card, prompt) {
@@ -78,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         prompt.disabled = true;
         card.classList.add('celebrating');
 
-        completionTitle.classList.remove('success');
+        completionTitle.classList.remove('rolling', 'success');
         setCompletionWord('Game Over');
         celebration.dataset.phase = 'game-over';
         celebration.setAttribute('aria-hidden', 'false');

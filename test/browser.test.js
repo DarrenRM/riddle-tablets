@@ -56,7 +56,8 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     );
     await page.locator('#topic-input').fill('Review me');
     await page.locator('#author-input').fill('Public Scribe');
-    await page.locator('#riddle-input').fill('This must remain hidden until approved.');
+    const multilineRiddle = 'First line.\n\nThird line after an empty line.';
+    await page.locator('#riddle-input').fill(multilineRiddle);
     await page.locator('#submit-tablet-btn').click();
     await page.getByText('Submitted for review.').waitFor();
     assert.equal(await page.locator('#topic-input').inputValue(), '');
@@ -72,6 +73,12 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     assert.ok(Math.abs(fifthClosedBox.x - boxes[0].x) < 1);
     assert.ok(Math.abs(fifthClosedBox.y - (boxes[0].y + boxes[0].height + gridGap)) < 2);
     assert.equal(await cards.first().getAttribute('aria-expanded'), 'false');
+    const sealOffset = await cards.first().evaluate((card) => {
+      const cardBox = card.getBoundingClientRect();
+      const sealBox = card.querySelector('.tablet-seal').getBoundingClientRect();
+      return (sealBox.left + sealBox.width / 2) - (cardBox.left + cardBox.width / 2);
+    });
+    assert.ok(Math.abs(sealOffset + 1.6) < 0.5);
     const closedBox = await cards.first().boundingBox();
     assert.ok(closedBox.height < 220);
     assert.notEqual(
@@ -135,6 +142,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     await completeButton.click();
     await page.locator('#completion-celebration[data-phase="game-over"]').waitFor();
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Game Over');
+    assert.equal(await page.locator('#completion-title .completion-letter').count(), 0);
     assert.notEqual(
       await page.locator('#completion-celebration').evaluate((element) => getComputedStyle(element).backdropFilter),
       'none'
@@ -158,6 +166,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     assert.ok(letterPositions.every((position, index) => index === 0 || position > letterPositions[index - 1]));
     await page.locator('#completion-celebration[data-phase="success"]').waitFor({ timeout: 4000 });
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
+    assert.equal(await page.locator('#completion-title .completion-letter').count(), 0);
     await page.locator('#completed-tablet-grid .riddle-tablet').waitFor();
     assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 4);
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -174,6 +183,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     assert.match(await page.getByRole('button', { name: /Pending/ }).textContent(), /1/);
     const pendingRow = page.locator('.moderation-row').first();
     assert.equal(await pendingRow.locator('[name="topic"]').inputValue(), 'Review me');
+    assert.equal(await pendingRow.locator('[name="riddle"]').inputValue(), multilineRiddle);
     await pendingRow.locator('[name="topic"]').fill('Reviewed in browser');
     await pendingRow.getByRole('button', { name: 'Approve' }).click();
     await page.getByText('Inscription approved.').waitFor();
@@ -185,6 +195,17 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 6);
     assert.equal(await page.getByText('Reviewed in browser').count(), 1);
+    const multilineCard = page.locator('#tablet-grid .riddle-tablet').filter({ hasText: 'Reviewed in browser' });
+    await multilineCard.locator('.tablet-toggle').click();
+    await multilineCard.evaluate((element) => new Promise((resolve) => {
+      const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);
+      done();
+    }));
+    assert.equal(await multilineCard.locator('.riddle-text').textContent(), multilineRiddle);
+    assert.equal(
+      await multilineCard.locator('.riddle-text').evaluate((element) => getComputedStyle(element).whiteSpace),
+      'pre-wrap'
+    );
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

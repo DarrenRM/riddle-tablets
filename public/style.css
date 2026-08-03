@@ -137,7 +137,7 @@ button:disabled {
     position: absolute;
     top: -0.85rem;
     left: 50%;
-    transform: translateX(calc(-50% + 3px));
+    transform: translateX(calc(-50% - 0.1rem));
     width: 1.7rem;
     color: var(--green);
     font-family: 'NoitaPixel', monospace;
@@ -216,6 +216,7 @@ button:disabled {
     line-height: 1.5;
     text-align: center;
     overflow-wrap: anywhere;
+    white-space: pre-wrap;
 }
 
 .tablet-open-prompt {
@@ -339,18 +340,19 @@ button:disabled {
 .completion-title {
     position: relative;
     z-index: 1;
-    display: flex;
     width: 100%;
     min-height: 1em;
     padding: 0 1rem 0.2em;
-    justify-content: center;
     color: #ffe89a;
     font-family: 'NoitaBlackletter', Georgia, serif;
     font-size: clamp(4rem, 12vw, 10rem);
     font-weight: normal;
     line-height: 0.95;
-    letter-spacing: 0.015em;
+    letter-spacing: 0;
     text-align: center;
+    text-rendering: optimizeLegibility;
+    font-kerning: normal;
+    font-feature-settings: 'kern' 1;
     background: linear-gradient(180deg, #fff3b0 5%, #ffd978 38%, #ff9a62 63%, #df5369 94%);
     background-clip: text;
     -webkit-background-clip: text;
@@ -364,7 +366,12 @@ button:disabled {
     animation: completion-title-arrive 520ms cubic-bezier(0.16, 1.25, 0.36, 1) forwards;
 }
 
-.completion-letter {
+.completion-title.rolling {
+    display: flex;
+    justify-content: center;
+}
+
+.completion-title.rolling .completion-letter {
     display: grid;
     flex: 0 0 0.56em;
     width: 0.56em;
