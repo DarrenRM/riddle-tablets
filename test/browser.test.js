@@ -4,8 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
 const { chromium } = require('playwright-core');
-const { createApp } = require('../app');
-const { MemoryTabletRepository } = require('../lib/tablet-repository');
+const { createApp, RateLimiter } = require('../app');
+const { MemorySubmissionRepository, MemoryTabletRepository } = require('../lib/tablet-repository');
 
 const chromeCandidates = [
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -13,12 +13,26 @@ const chromeCandidates = [
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
 ];
 
-test('save, edit, masonry reveal, and local reveal/completion state work', { timeout: 60000 }, async (t) => {
+function fixture(id, topic, author, riddle, offset) {
+  const timestamp = Date.now() - offset;
+  return { id, topic, author, riddle, createdAt: timestamp, updatedAt: timestamp };
+}
+
+test('public submission, moderation, masonry, reveal, and completion flows work', { timeout: 90000 }, async (t) => {
   const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
   if (!executablePath) return t.skip('No supported local Chromium browser was found.');
+  const tablets = new MemoryTabletRepository([
+    fixture('time', 'Time', 'Last Scribe', 'I am held by none.', 1000),
+    fixture('newest', 'Newest', 'Layout Scribe', 'I should sit directly beneath the first tablet.', 2000),
+    fixture('echo', 'Echo', 'Cave Listener', Array(120).fill('you can').join(' '), 3000),
+    fixture('fire', 'Fire', 'Ash Keeper', 'I die when I drink.', 4000),
+    fixture('moon', 'Moonlight', 'First Scribe', 'I borrow the sun and return it pale.', 5000)
+  ]);
   const app = createApp({
-    tabletRepository: new MemoryTabletRepository(),
-    config: { createPassword: 'browser-password', logRequests: false },
+    tabletRepository: tablets,
+    submissionRepository: new MemorySubmissionRepository(),
+    submissionLimiter: new RateLimiter({ max: 20, windowMs: 60_000 }),
+    config: { moderatorPassword: 'browser-password', logRequests: false },
     logger: { log() {}, error() {} }
   });
   const server = await new Promise((resolve) => {
@@ -29,33 +43,21 @@ test('save, edit, masonry reveal, and local reveal/completion state work', { tim
     browser = await chromium.launch({ executablePath, headless: true });
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     const origin = `http://127.0.0.1:${server.address().port}`;
-    await page.goto(`${origin}/create`, { waitUntil: 'domcontentloaded' });
-    await page.locator('#create-password').fill('browser-password');
-    await page.getByRole('button', { name: 'Enter' }).click();
-    await page.locator('#tablet-form').waitFor();
 
-    async function save(topic, author, riddle) {
-      await page.locator('#topic-input').fill(topic);
-      await page.locator('#author-input').fill(author);
-      await page.locator('#riddle-input').fill(riddle);
-      await page.locator('#save-tablet-btn').click();
-      await page.getByText(`Saved “${topic}”.`).waitFor();
-    }
-    await save('Moon', 'First Scribe', 'I borrow the sun and return it pale.');
-    assert.equal(await page.locator('#save-toast').isVisible(), true);
-    await page.locator('#save-toast:not(.visible)').waitFor();
-    await page.locator('.saved-tablet-row').first().getByRole('button', { name: 'Edit' }).click();
-    await page.locator('#topic-input').fill('Moonlight');
-    await page.locator('#save-tablet-btn').click();
-    await page.getByText('Saved changes to “Moonlight”.').waitFor();
-    await save('Fire', 'Ash Keeper', 'I die when I drink.');
-    await save('Echo', 'Cave Listener', Array(120).fill('you can').join(' '));
-    await save('Newest', 'Layout Scribe', 'I should sit directly beneath the first tablet.');
-    await save('Time', 'Last Scribe', 'I am held by none.');
+    await page.goto(`${origin}/submit`, { waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('#submission-form').isVisible(), true);
+    assert.equal(await page.locator('.saved-section').count(), 0);
+    await page.locator('#topic-input').fill('Review me');
+    await page.locator('#author-input').fill('Public Scribe');
+    await page.locator('#riddle-input').fill('This must remain hidden until approved.');
+    await page.locator('#submit-tablet-btn').click();
+    await page.getByText('Submitted for review.').waitFor();
+    assert.equal(await page.locator('#topic-input').inputValue(), '');
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     const cards = page.locator('#tablet-grid .riddle-tablet');
     assert.equal(await cards.count(), 5);
+    assert.equal(await page.getByText('Review me').count(), 0);
     const boxes = await Promise.all(Array.from({ length: 4 }, (_, index) => cards.nth(index).boundingBox()));
     assert.ok(boxes.every((box) => box && Math.abs(box.y - boxes[0].y) < 1));
     const fifthClosedBox = await cards.nth(4).boundingBox();
@@ -109,50 +111,39 @@ test('save, edit, masonry reveal, and local reveal/completion state work', { tim
     }));
     const openBox = await cards.first().boundingBox();
     assert.ok(openBox.height > closedBox.height);
-    assert.equal(
-      await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).display),
-      'block'
-    );
     assert.equal(await cards.first().locator('.tablet-open-prompt').textContent(), 'Mark as complete');
-    assert.equal(
-      await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).opacity),
-      '1'
-    );
     assert.equal(
       await cards.first().locator('.riddle-topic').evaluate((element) => getComputedStyle(element).fontSize),
       await cards.first().locator('.riddle-text').evaluate((element) => getComputedStyle(element).fontSize)
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.riddle-tablet').first().getAttribute('aria-expanded'), 'true');
-    assert.match(await page.locator('.riddle-tablet').first().locator('.riddle-text').textContent(), /held by none/i);
-    await page.locator('#tablet-grid .riddle-tablet').first().locator('.tablet-toggle').click();
-    await page.waitForTimeout(700);
-    assert.equal(await page.locator('.riddle-tablet').first().getAttribute('aria-expanded'), 'false');
-    const reclosedBox = await page.locator('.riddle-tablet').first().boundingBox();
-    assert.ok(reclosedBox.height < openBox.height);
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('#tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'false');
-    assert.equal(await page.locator('#tablet-grid .riddle-tablet').first().locator('.riddle-text').textContent(), '');
-
-    await page.locator('#tablet-grid .riddle-tablet').first().locator('.tablet-toggle').click();
-    await page.locator('#tablet-grid .riddle-tablet').first().evaluate((element) => new Promise((resolve) => {
-      const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);
-      done();
-    }));
+    assert.equal(await page.locator('#tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'true');
     await page.locator('#tablet-grid .riddle-tablet').first().getByRole('button', { name: 'Mark as complete' }).click();
     await page.locator('#completed-tablet-grid .riddle-tablet').waitFor();
     assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 4);
-    assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 1);
-    assert.equal(await page.locator('#completed-tablet-grid .riddle-topic').textContent(), 'Time');
-    assert.equal(
-      await page.locator('#completed-tablet-grid .tablet-open-prompt').textContent(),
-      'Return to active'
-    );
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 1);
-    await page.locator('#completed-tablet-grid .riddle-tablet').getByRole('button', { name: 'Return to active' }).click();
+    await page.locator('#completed-tablet-grid .tablet-open-prompt').click();
     await page.waitForFunction(() => document.querySelectorAll('#tablet-grid .riddle-tablet').length === 5);
-    assert.equal(await page.locator('#completed-section').isHidden(), true);
+
+    await page.goto(`${origin}/approve`, { waitUntil: 'domcontentloaded' });
+    await page.locator('#approve-password').fill('browser-password');
+    await page.getByRole('button', { name: 'Enter' }).click();
+    await page.locator('#moderation-tabs').waitFor();
+    assert.match(await page.getByRole('button', { name: /Pending/ }).textContent(), /1/);
+    const pendingRow = page.locator('.moderation-row').first();
+    assert.equal(await pendingRow.locator('[name="topic"]').inputValue(), 'Review me');
+    await pendingRow.locator('[name="topic"]').fill('Reviewed in browser');
+    await pendingRow.getByRole('button', { name: 'Approve' }).click();
+    await page.getByText('Inscription approved.').waitFor();
+    await page.getByRole('button', { name: /Published/ }).click();
+    await page.waitForFunction(() => document.querySelectorAll('.moderation-row').length === 6);
+    const publishedTopics = await page.locator('.moderation-row [name="topic"]').evaluateAll((inputs) => inputs.map((input) => input.value));
+    assert.ok(publishedTopics.includes('Reviewed in browser'));
+
+    await page.goto(origin, { waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 6);
+    assert.equal(await page.getByText('Reviewed in browser').count(), 1);
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

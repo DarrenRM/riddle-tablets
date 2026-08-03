@@ -7,7 +7,7 @@ const app = createApp();
 
 app.listen(port, '127.0.0.1', () => {
   console.log(`Riddle Tablets listening on http://127.0.0.1:${port}`);
-  if (!process.env.CREATE_PASSWORD) {
-    console.log('The /create page is locked until CREATE_PASSWORD is set in .env.');
+  if (!process.env.MODERATOR_PASSWORD && !process.env.CREATE_PASSWORD) {
+    console.log('The /approve page is locked until MODERATOR_PASSWORD is set in .env.');
   }
 });

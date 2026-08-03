@@ -2,7 +2,7 @@
   "name": "riddle-tablets",
   "version": "1.0.0",
   "private": true,
-  "description": "A password-authored gallery of animated riddle tablets",
+  "description": "A moderated gallery of animated community riddle tablets",
   "main": "index.js",
   "scripts": {
     "start": "node server.js",

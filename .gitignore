@@ -3,7 +3,7 @@ node_modules/
 .env.local
 .env*.local
 .vercel/
-data/tablets.local.json
+data/*.local.json
 server.stdout.log
 server.stderr.log
 artifacts/

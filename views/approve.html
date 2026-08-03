@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderate Inscriptions</title>
+    <link rel="stylesheet" href="/style.css?v=9">
+</head>
+<body class="approve-page">
+    <div class="approve-container">
+        <header class="approve-header">
+            <div>
+                <p class="eyebrow">The moderation chamber</p>
+                <h1>Review Inscriptions</h1>
+            </div>
+            <a href="/" class="text-link">View tablets</a>
+        </header>
+        <div id="moderation-toast" class="save-toast" role="status" aria-live="polite"></div>
+        <nav id="moderation-tabs" class="moderation-tabs" aria-label="Moderation queues">
+            <button type="button" class="active" data-status="pending">Pending <span data-count="pending">0</span></button>
+            <button type="button" data-status="published">Published <span data-count="published">0</span></button>
+            <button type="button" data-status="rejected">Rejected <span data-count="rejected">0</span></button>
+        </nav>
+        <main>
+            <p id="moderation-status" class="moderation-status" role="status" aria-live="polite">Summoning the queue...</p>
+            <div id="moderation-list" class="moderation-list"></div>
+        </main>
+    </div>
+    <script type="module" src="/approve.js?v=1"></script>
+</body>
+</html>

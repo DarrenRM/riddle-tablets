@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Submit an Inscription</title>
+    <link rel="stylesheet" href="/style.css?v=9">
+</head>
+<body class="submit-page">
+    <div class="submit-container">
+        <header>
+            <p class="eyebrow">Offer an inscription</p>
+            <h1>Submit a Tablet</h1>
+            <p class="subtitle">Every inscription is reviewed before it enters the archive.</p>
+        </header>
+        <main>
+            <div id="submit-toast" class="save-toast" role="status" aria-live="polite"></div>
+            <form id="submission-form" class="inscription-form">
+                <div class="form-field">
+                    <label for="topic-input">Topic</label>
+                    <input id="topic-input" name="topic" type="text" maxlength="120" required autocomplete="off">
+                </div>
+                <div class="form-field">
+                    <label for="author-input">Author</label>
+                    <input id="author-input" name="author" type="text" maxlength="120" required autocomplete="off">
+                </div>
+                <div class="form-field">
+                    <label for="riddle-input">Riddle</label>
+                    <textarea id="riddle-input" name="riddle" rows="7" maxlength="2000" required></textarea>
+                </div>
+                <div class="submission-honeypot" aria-hidden="true">
+                    <label for="website-input">Website</label>
+                    <input id="website-input" name="website" type="text" tabindex="-1" autocomplete="off">
+                </div>
+                <div class="form-actions">
+                    <button id="submit-tablet-btn" type="submit">Submit for Review</button>
+                    <span id="form-status" role="status" aria-live="polite"></span>
+                </div>
+            </form>
+            <p class="submit-home-link"><a href="/" class="text-link">Return to the tablets</a></p>
+        </main>
+    </div>
+    <script type="module" src="/submit.js?v=1"></script>
+</body>
+</html>

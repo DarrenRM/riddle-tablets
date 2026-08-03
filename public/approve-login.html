@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderation Chamber</title>
+    <link rel="stylesheet" href="/style.css?v=9">
+</head>
+<body class="login-page">
+    <main class="login-shell">
+        <p class="eyebrow">The moderation chamber</p>
+        <h1>Speak the Word</h1>
+        <p class="subtitle">Reviewers only.</p>
+        <form id="approve-login-form" class="login-form">
+            <label for="approve-password">Password</label>
+            <input id="approve-password" type="password" required autofocus autocomplete="current-password">
+            <button type="submit">Enter</button>
+            <p id="login-status" role="alert" aria-live="polite"></p>
+        </form>
+    </main>
+    <script type="module" src="/approve-login.js?v=1"></script>
+</body>
+</html>

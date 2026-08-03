@@ -1,12 +1,21 @@
 # Riddle Tablets
 
-A standalone gallery of animated riddle tablets with a hidden, password-gated editor.
+A moderated gallery of animated community riddle tablets.
+
+## Workflow
+
+- `/` shows only approved inscriptions.
+- `/submit` is a public submission form. It never lists other submissions.
+- `/approve` is password-gated and provides inline Pending, Published, and Rejected moderation queues.
+- `/create` redirects to `/submit` for backward compatibility.
+
+Public submissions are validated, checked by a honeypot, and rate-limited by IP. Approval publishes the moderator's inline edits. Rejected inscriptions are retained until restored or permanently deleted. Published inscriptions can be edited or unpublished.
 
 ## Local preview
 
 ```powershell
 Copy-Item .env.example .env
-# Edit .env and set CREATE_PASSWORD
+# Edit .env and set MODERATOR_PASSWORD
 npm install
 npm start
 ```
@@ -14,28 +23,25 @@ npm start
 Open:
 
 - Gallery: <http://127.0.0.1:3000/>
-- Password-gated editor: <http://127.0.0.1:3000/create>
+- Public submission: <http://127.0.0.1:3000/submit>
+- Password-gated moderation: <http://127.0.0.1:3000/approve>
 
-Without Upstash credentials, local edits persist to the ignored `data/tablets.local.json` file. Existing tablets from the earlier browser-local experiment are imported after the first successful editor login.
+Without Upstash credentials, local published tablets and submissions persist to ignored JSON files under `data/`.
 
 ## Vercel deployment
 
-1. Import or deploy this repository as a Vercel project. The root `index.js` exports the Express application Vercel detects.
-2. In Vercel Marketplace, install Upstash Redis and connect it to this project. Current Vercel integrations supply `KV_REST_API_URL` and `KV_REST_API_TOKEN`; direct Upstash credentials named `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are also supported.
-3. Add `CREATE_PASSWORD` as a sensitive environment variable for Production and Preview.
+1. Import or deploy this repository as a Vercel project.
+2. Connect an Upstash Redis resource. Current Vercel integrations supply `KV_REST_API_URL` and `KV_REST_API_TOKEN`; direct `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` credentials are also supported.
+3. Add `MODERATOR_PASSWORD` as a sensitive Production and Preview variable. Existing `CREATE_PASSWORD` deployments remain compatible.
 4. Redeploy after changing environment variables.
 
-The same setup can be done from this linked project with:
-
 ```powershell
-vercel env add CREATE_PASSWORD production
+vercel env add MODERATOR_PASSWORD production
 vercel integration add upstash/upstash-kv --plan free --environment production --metadata primaryRegion=iad1 --metadata autoUpgrade=false
 vercel --prod
 ```
 
 The integration command creates an external Upstash resource. Review the selected account and region before running it.
-
-The public page exposes no editor or navigation link. `/create` is protected by a rate-limited password exchange and an HTTP-only, SameSite=Strict cookie. Opened tablet IDs stay in each visitor's local storage; tablet content is shared through Upstash.
 
 ## Commands
 

@@ -333,13 +333,16 @@ button:disabled {
     color: #817e89;
 }
 
-.create-container {
+.create-container,
+.submit-container,
+.approve-container {
     width: min(980px, 100%);
     margin: 0 auto;
     padding: 2rem;
 }
 
-.create-container header {
+.create-container header,
+.submit-container > header {
     margin: 2rem 0 3rem;
     text-align: center;
 }
@@ -354,6 +357,8 @@ button:disabled {
 }
 
 .create-container h1,
+.submit-container h1,
+.approve-container h1,
 .login-shell h1 {
     color: var(--gold);
     font-family: Georgia, serif;
@@ -421,7 +426,9 @@ textarea {
 
 .form-actions button,
 .login-form button,
-.row-edit-button {
+.row-edit-button,
+.moderation-actions button,
+.moderation-tabs button {
     padding: 0.8rem 1.2rem;
     border: 1px solid var(--purple);
     border-radius: 4px;
@@ -440,6 +447,168 @@ textarea {
     color: #777384;
     font-family: 'NoitaPixel', monospace;
     font-size: 0.72rem;
+}
+
+.submission-honeypot {
+    position: absolute !important;
+    left: -10000px !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+}
+
+.submit-home-link {
+    margin-top: 1.4rem;
+    text-align: center;
+}
+
+.approve-container {
+    width: min(1380px, 100%);
+}
+
+.approve-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: 1.5rem 0 2rem;
+}
+
+.moderation-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 1.5rem;
+}
+
+.moderation-tabs button {
+    border-color: #34303e;
+    background: rgba(22, 20, 29, 0.9);
+    color: #817e89;
+    font-family: 'NoitaPixel', monospace;
+    font-size: 0.7rem;
+}
+
+.moderation-tabs button.active {
+    border-color: var(--purple);
+    color: var(--purple);
+    box-shadow: 0 0 18px rgba(168, 102, 255, 0.12);
+}
+
+.moderation-tabs span {
+    display: inline-grid;
+    min-width: 1.5rem;
+    height: 1.5rem;
+    margin-left: 0.35rem;
+    place-items: center;
+    border-radius: 999px;
+    background: #292531;
+    color: #b4afbb;
+}
+
+.moderation-status {
+    min-height: 1.5rem;
+    margin-bottom: 0.8rem;
+    color: #777384;
+    font-family: 'NoitaPixel', monospace;
+    font-size: 0.68rem;
+}
+
+.moderation-list {
+    display: grid;
+    gap: 0.8rem;
+}
+
+.moderation-row {
+    padding: 1rem;
+    border: 1px solid #2c2934;
+    border-radius: 6px;
+    background: rgba(18, 17, 25, 0.9);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.24);
+}
+
+.moderation-pending {
+    border-color: rgba(168, 102, 255, 0.35);
+}
+
+.moderation-published {
+    border-color: rgba(71, 226, 136, 0.28);
+}
+
+.moderation-rejected {
+    border-color: rgba(180, 80, 100, 0.3);
+}
+
+.moderation-fields {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.8fr) minmax(150px, 0.7fr) minmax(300px, 2fr);
+    gap: 0.75rem;
+    align-items: start;
+}
+
+.moderation-field {
+    display: grid;
+    gap: 0.3rem;
+}
+
+.moderation-field > span {
+    color: #777384;
+    font-family: 'NoitaPixel', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.moderation-field input,
+.moderation-field textarea {
+    padding: 0.75rem;
+    font-size: 0.9rem;
+}
+
+.moderation-field textarea {
+    min-height: 7rem;
+}
+
+.moderation-meta {
+    margin-top: 0.55rem;
+    color: #55525e;
+    font-size: 0.75rem;
+}
+
+.moderation-actions {
+    display: flex;
+    gap: 0.55rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.moderation-actions button {
+    padding: 0.55rem 0.8rem;
+    font-family: 'NoitaPixel', monospace;
+    font-size: 0.64rem;
+}
+
+.approve-button {
+    border-color: var(--green) !important;
+    background: rgba(20, 60, 40, 0.72) !important;
+    color: var(--green) !important;
+}
+
+.save-edit-button {
+    border-color: #625b6d !important;
+    background: rgba(42, 38, 49, 0.85) !important;
+    color: #b7b1bf !important;
+}
+
+.reject-button,
+.delete-button {
+    border-color: #8a4052 !important;
+    background: rgba(70, 26, 38, 0.75) !important;
+    color: #db8298 !important;
+}
+
+.delete-button {
+    margin-left: auto;
 }
 
 .save-toast {
@@ -581,9 +750,25 @@ textarea {
 
 @media (max-width: 620px) {
     .archive-container,
-    .create-container { padding: 2rem 1.2rem; }
+    .create-container,
+    .submit-container,
+    .approve-container { padding: 2rem 1.2rem; }
     .section-heading-row { align-items: flex-start; flex-direction: column; }
     .form-actions > button { width: 100%; }
+    .approve-header { align-items: flex-start; flex-direction: column; }
+    .moderation-tabs { grid-template-columns: 1fr; }
+    .moderation-fields { grid-template-columns: 1fr; }
+    .moderation-actions button { width: 100%; }
+    .delete-button { margin-left: 0; }
+}
+
+@media (min-width: 621px) and (max-width: 1000px) {
+    .moderation-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .moderation-field-riddle {
+        grid-column: 1 / -1;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
