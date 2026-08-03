@@ -63,3 +63,19 @@ export function inscribeText(element, text, { delay = 0, duration = 1500 } = {})
         }, reduceMotion ? 0 : delay + progress * duration);
     });
 }
+
+export function flickerGlyphText(element, text, { duration = 700 } = {}) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const spans = buildGlyphText(element, text);
+    const order = createRevealOrder(text);
+    spans.forEach((span) => { span.className = 'pixel-char'; });
+    order.forEach((index, rank) => {
+        const progress = order.length > 1 ? rank / (order.length - 1) : 0;
+        window.setTimeout(() => {
+            if (spans[index]) spans[index].className = 'glyph-char';
+        }, progress * duration * 0.42);
+        window.setTimeout(() => {
+            if (spans[index]) spans[index].className = 'pixel-char';
+        }, duration * 0.58 + progress * duration * 0.42);
+    });
+}

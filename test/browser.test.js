@@ -13,7 +13,7 @@ const chromeCandidates = [
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
 ];
 
-test('save, edit, four-column reveal, and local reveal restoration work', { timeout: 60000 }, async (t) => {
+test('save, edit, compact accordion reveal, glyph flicker, and local reveal restoration work', { timeout: 60000 }, async (t) => {
   const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
   if (!executablePath) return t.skip('No supported local Chromium browser was found.');
   const app = createApp({
@@ -58,14 +58,43 @@ test('save, edit, four-column reveal, and local reveal restoration work', { time
     const boxes = await Promise.all(Array.from({ length: 4 }, (_, index) => cards.nth(index).boundingBox()));
     assert.ok(boxes.every((box) => box && Math.abs(box.y - boxes[0].y) < 1));
     assert.equal(await cards.first().getAttribute('aria-expanded'), 'false');
+    const closedBox = await cards.first().boundingBox();
+    assert.ok(closedBox.height < 220);
+    assert.notEqual(
+      await cards.first().locator('.riddle-author-label').evaluate((element) => getComputedStyle(element).color),
+      await cards.first().locator('.riddle-author-name').evaluate((element) => getComputedStyle(element).color)
+    );
+    assert.notEqual(
+      await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).animationName),
+      'none'
+    );
+    await page.waitForFunction(
+      () => Boolean(document.querySelector('.riddle-tablet:not(.revealed) .riddle-topic .glyph-char')),
+      null,
+      { timeout: 8500 }
+    );
     await cards.first().click();
     await cards.first().evaluate((element) => new Promise((resolve) => {
       const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);
       done();
     }));
+    const openBox = await cards.first().boundingBox();
+    assert.ok(openBox.height > closedBox.height);
+    assert.equal(
+      await cards.first().locator('.riddle-topic').evaluate((element) => getComputedStyle(element).fontSize),
+      await cards.first().locator('.riddle-text').evaluate((element) => getComputedStyle(element).fontSize)
+    );
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.riddle-tablet').first().getAttribute('aria-expanded'), 'true');
     assert.match(await page.locator('.riddle-tablet').first().locator('.riddle-text').textContent(), /held by none/i);
+    await page.locator('.riddle-tablet').first().click();
+    await page.waitForTimeout(700);
+    assert.equal(await page.locator('.riddle-tablet').first().getAttribute('aria-expanded'), 'false');
+    const reclosedBox = await page.locator('.riddle-tablet').first().boundingBox();
+    assert.ok(reclosedBox.height < openBox.height);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('.riddle-tablet').first().getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('.riddle-tablet').first().locator('.riddle-text').textContent(), '');
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

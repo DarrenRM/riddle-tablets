@@ -70,12 +70,13 @@ button:disabled {
 }
 
 .riddle-tablet {
+    --tablet-copy-size: clamp(1rem, 1.35vw, 1.25rem);
     display: flex;
     flex-direction: column;
     align-items: stretch;
     width: 100%;
     min-width: 0;
-    min-height: 220px;
+    min-height: 0;
     padding: 1.55rem 1.35rem 1.25rem;
     position: relative;
     overflow: visible;
@@ -134,7 +135,7 @@ button:disabled {
     display: block;
     color: var(--purple);
     font-family: 'NoitaPixel', monospace;
-    font-size: clamp(1rem, 1.35vw, 1.25rem);
+    font-size: var(--tablet-copy-size);
     line-height: 1.35;
     overflow-wrap: anywhere;
     text-shadow: 0 0 10px rgba(144, 80, 224, 0.2);
@@ -184,29 +185,45 @@ button:disabled {
     display: block;
     color: var(--green);
     font-family: 'NoitaPixel', monospace;
-    font-size: 0.88rem;
-    line-height: 1.6;
+    font-size: var(--tablet-copy-size);
+    line-height: 1.5;
     text-align: center;
     overflow-wrap: anywhere;
 }
 
 .tablet-open-prompt {
     display: block;
-    margin-top: auto;
-    padding-top: 1.3rem;
+    margin-top: 1.3rem;
     color: #555563;
     font-family: 'NoitaPixel', monospace;
     font-size: 0.62rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    animation: inscription-breathe 4s ease-in-out infinite;
 }
 
 .revealing .tablet-open-prompt {
     color: rgba(71, 226, 136, 0.48);
+    animation: none;
 }
 
 .revealed .tablet-open-prompt {
     display: none;
+}
+
+.riddle-author-name {
+    color: #c3c1cb;
+}
+
+@keyframes inscription-breathe {
+    0%, 100% {
+        color: #555563;
+        text-shadow: 0 0 0 rgba(71, 226, 136, 0);
+    }
+    50% {
+        color: var(--green);
+        text-shadow: 0 0 9px rgba(71, 226, 136, 0.28);
+    }
 }
 
 .word-wrap {

@@ -34,8 +34,13 @@ export function loadRevealedTabletIds() {
 }
 
 export function markTabletRevealed(id) {
+    setTabletRevealed(id, true);
+}
+
+export function setTabletRevealed(id, isRevealed) {
     if (typeof id !== 'string' || !id) return;
     const ids = loadRevealedTabletIds();
-    ids.add(id);
+    if (isRevealed) ids.add(id);
+    else ids.delete(id);
     localStorage.setItem(REVEAL_STORAGE_KEY, JSON.stringify([...ids]));
 }
