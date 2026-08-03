@@ -163,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await delay(reduceMotion ? 350 : 1500);
         if (activeCelebration !== session || session.dismissed) return;
         celebration.dataset.phase = 'scrambling';
-        await morphCompletionWord('Game Over', 'Success');
+        await morphCompletionWord('Game Over', '(not really)');
         if (activeCelebration !== session || session.dismissed) return;
         completionTitle.classList.add('success');
         celebration.dataset.phase = 'success';

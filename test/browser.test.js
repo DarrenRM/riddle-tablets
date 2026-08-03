@@ -176,10 +176,10 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     const letterPositions = await page.locator('#completion-title .completion-letter').evaluateAll((letters) => (
       letters.map((letter) => letter.getBoundingClientRect().left)
     ));
-    assert.equal(letterPositions.length, 9);
+    assert.equal(letterPositions.length, 12);
     assert.ok(letterPositions.every((position, index) => index === 0 || position > letterPositions[index - 1]));
     await page.locator('#completion-celebration[data-phase="success"]').waitFor({ timeout: 4000 });
-    assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
+    assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), '(not really)');
     assert.equal(await page.locator('#completion-title .completion-letter').count(), 0);
     assert.equal(await page.locator('#completion-celebration').evaluate((element) => element.classList.contains('dismissible')), true);
     assert.equal(await page.locator('#completion-close').isVisible(), true);
