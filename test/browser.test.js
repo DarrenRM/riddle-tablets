@@ -81,10 +81,13 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
       const borderCenterY = cardBox.top + parseFloat(getComputedStyle(card).borderTopWidth) / 2;
       return {
         x: (sealBox.left + sealBox.width / 2) - (cardBox.left + cardBox.width / 2),
-        y: (sealBox.top + sealBox.height / 2) - borderCenterY
+        y: (sealBox.top + sealBox.height / 2) - borderCenterY,
+        width: sealBox.width,
+        expectedWidth: parseFloat(getComputedStyle(document.documentElement).fontSize) * 1.45
       };
     }));
     assert.ok(sealOffsets.every(({ x, y }) => Math.abs(x) < 0.1 && Math.abs(y) < 0.1));
+    assert.ok(sealOffsets.every(({ width, expectedWidth }) => Math.abs(width - expectedWidth) < 0.1));
     const closedBox = await cards.first().boundingBox();
     assert.ok(closedBox.height < 220);
     assert.notEqual(

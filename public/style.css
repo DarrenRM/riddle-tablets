@@ -138,8 +138,8 @@ button:disabled {
     z-index: 2;
     top: -0.5px;
     left: 50%;
-    width: 1.7rem;
-    height: 1.7rem;
+    width: 1.45rem;
+    height: 1.45rem;
     transform: translate(-50%, -50%);
     pointer-events: none;
     color: var(--green);
