@@ -198,7 +198,23 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 4);
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 1);
-    await page.locator('#completed-tablet-grid .tablet-open-prompt').click();
+    const completedPrompt = page.locator('#completed-tablet-grid .tablet-open-prompt');
+    assert.equal(await completedPrompt.getAttribute('aria-label'), 'Return completed riddle to active');
+    assert.equal(await completedPrompt.locator('.completed-prompt-label').textContent(), 'Completed');
+    assert.equal(
+      await completedPrompt.locator('.completed-prompt-label').evaluate((element) => getComputedStyle(element).color),
+      'rgb(240, 192, 64)'
+    );
+    assert.equal(await completedPrompt.locator('.completed-prompt-action').evaluate((element) => getComputedStyle(element).opacity), '0');
+    await completedPrompt.hover();
+    await page.waitForTimeout(220);
+    assert.equal(await completedPrompt.locator('.completed-prompt-label').evaluate((element) => getComputedStyle(element).opacity), '0');
+    assert.equal(await completedPrompt.locator('.completed-prompt-action').evaluate((element) => getComputedStyle(element).opacity), '1');
+    assert.equal(
+      await completedPrompt.locator('.completed-prompt-action').evaluate((element) => getComputedStyle(element).color),
+      'rgb(168, 102, 255)'
+    );
+    await completedPrompt.click();
     await page.waitForFunction(() => document.querySelectorAll('#tablet-grid .riddle-tablet').length === 5);
 
     await page.evaluate(() => { Math.random = () => 0.75; });

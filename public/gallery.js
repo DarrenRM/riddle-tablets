@@ -284,8 +284,17 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         const setRestingPrompt = () => {
             prompt.disabled = false;
-            if (isCompleted) prompt.textContent = 'Return to active';
-            else if (card.classList.contains('revealed')) prompt.textContent = 'Mark as complete';
+            prompt.removeAttribute('aria-label');
+            if (isCompleted) {
+                const completedLabel = document.createElement('span');
+                completedLabel.className = 'completed-prompt-label';
+                completedLabel.textContent = 'Completed';
+                const activeLabel = document.createElement('span');
+                activeLabel.className = 'completed-prompt-action';
+                activeLabel.textContent = 'Return to active';
+                prompt.replaceChildren(completedLabel, activeLabel);
+                prompt.setAttribute('aria-label', 'Return completed riddle to active');
+            } else if (card.classList.contains('revealed')) prompt.textContent = 'Mark as complete';
             else prompt.textContent = 'Reveal tablet';
         };
 

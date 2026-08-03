@@ -267,8 +267,30 @@ button:disabled {
 }
 
 .completed .tablet-open-prompt {
-    color: var(--purple);
+    display: grid;
+    color: var(--gold);
     animation: none;
+}
+
+.completed-prompt-label,
+.completed-prompt-action {
+    grid-area: 1 / 1;
+    transition: color 200ms ease, opacity 200ms ease, text-shadow 200ms ease;
+}
+
+.completed-prompt-action {
+    color: var(--purple);
+    opacity: 0;
+}
+
+.completed .tablet-open-prompt:hover .completed-prompt-label,
+.completed .tablet-open-prompt:focus-visible .completed-prompt-label {
+    opacity: 0;
+}
+
+.completed .tablet-open-prompt:hover .completed-prompt-action,
+.completed .tablet-open-prompt:focus-visible .completed-prompt-action {
+    opacity: 1;
 }
 
 .tablet-open-prompt:disabled {
