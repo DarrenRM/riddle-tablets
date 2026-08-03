@@ -90,6 +90,7 @@ button:disabled {
     border-radius: 8px;
     background: linear-gradient(145deg, rgba(28, 24, 38, 0.94), rgba(12, 13, 19, 0.98));
     color: var(--text);
+    cursor: pointer;
     text-align: center;
     box-shadow: 0 12px 36px rgba(0, 0, 0, 0.42), inset 0 0 32px rgba(71, 226, 136, 0.025);
     transition: transform 180ms ease, border-color 240ms ease, box-shadow 240ms ease;

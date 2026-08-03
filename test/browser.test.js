@@ -73,6 +73,14 @@ test('save, edit, masonry reveal, and local reveal/completion state work', { tim
       await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).animationName),
       'none'
     );
+    await cards.first().click({ position: { x: 6, y: 6 } });
+    await cards.first().evaluate((element) => new Promise((resolve) => {
+      const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);
+      done();
+    }));
+    await cards.first().click({ position: { x: 6, y: 6 } });
+    await page.waitForTimeout(700);
+    assert.equal(await cards.first().getAttribute('aria-expanded'), 'false');
     await page.waitForFunction(
       () => Boolean(document.querySelector('.riddle-tablet:not(.revealed) .riddle-topic .glyph-char')),
       null,

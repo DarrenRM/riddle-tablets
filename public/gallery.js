@@ -165,7 +165,8 @@ document.addEventListener('DOMContentLoaded', () => {
             window.setTimeout(() => renderTablets(currentTablets), reduceMotion ? 0 : 180);
         };
 
-        toggle.addEventListener('click', () => {
+        card.addEventListener('click', (event) => {
+            if (event.target instanceof Element && event.target.closest('.tablet-open-prompt')) return;
             if (card.classList.contains('revealing')) return;
             if (card.classList.contains('revealed')) closeTablet();
             else openTablet();
