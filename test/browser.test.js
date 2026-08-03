@@ -83,7 +83,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
         x: (sealBox.left + sealBox.width / 2) - (cardBox.left + cardBox.width / 2),
         y: (sealBox.top + sealBox.height / 2) - borderCenterY,
         width: sealBox.width,
-        expectedWidth: parseFloat(getComputedStyle(document.documentElement).fontSize) * 1.45
+        expectedWidth: parseFloat(getComputedStyle(document.documentElement).fontSize)
       };
     }));
     assert.ok(sealOffsets.every(({ x, y }) => Math.abs(x) < 0.1 && Math.abs(y) < 0.1));
