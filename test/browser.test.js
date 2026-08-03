@@ -48,7 +48,8 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     assert.equal(await page.locator('#submission-form').isVisible(), true);
     assert.equal(await page.locator('.saved-section').count(), 0);
     assert.equal(await page.locator('.eyebrow').textContent(), 'Inscribe your own tablet for Crunchpuff');
-    assert.equal(await page.locator('h1').textContent(), 'Submit a Spoiler / Riddle');
+    assert.equal(await page.locator('h1').textContent(), 'Submit your Spoiler Riddle or Clue');
+    assert.equal(await page.title(), 'Submit your Spoiler Riddle or Clue');
     assert.equal(await page.locator('.subtitle').textContent(), 'Mods will review and approve');
     assert.match(
       await page.locator('#submit-tablet-btn').evaluate((element) => getComputedStyle(element).fontFamily),
@@ -65,6 +66,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     const cards = page.locator('#tablet-grid .riddle-tablet');
     assert.equal(await cards.count(), 5);
+    assert.equal(await cards.first().locator('.tablet-open-prompt').textContent(), 'Reveal tablet');
     assert.equal(await page.getByText('Review me').count(), 0);
     const boxes = await Promise.all(Array.from({ length: 4 }, (_, index) => cards.nth(index).boundingBox()));
     assert.ok(boxes.every((box) => box && Math.abs(box.y - boxes[0].y) < 1));
@@ -176,6 +178,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     assert.equal(await page.locator('#completion-close').isVisible(), true);
     assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 1);
     assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 4);
+    assert.equal(await page.locator('#completed-heading').textContent(), 'Solved riddles');
     await page.locator('#completion-sound').evaluate((audio) => {
       audio.currentTime = Math.max(0, audio.duration - 0.12);
     });

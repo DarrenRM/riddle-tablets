@@ -286,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
             prompt.disabled = false;
             if (isCompleted) prompt.textContent = 'Return to active';
             else if (card.classList.contains('revealed')) prompt.textContent = 'Mark as complete';
-            else prompt.textContent = 'Awaken inscription';
+            else prompt.textContent = 'Reveal tablet';
         };
 
         const openTablet = () => {
