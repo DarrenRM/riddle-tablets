@@ -12,8 +12,98 @@ document.addEventListener('DOMContentLoaded', () => {
     const completedSection = document.getElementById('completed-section');
     const completedGrid = document.getElementById('completed-tablet-grid');
     const empty = document.getElementById('archive-empty');
+    const celebration = document.getElementById('completion-celebration');
+    const completionTitle = document.getElementById('completion-title');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let currentTablets = [];
     let stopLayouts = () => {};
+    let celebrationInProgress = false;
+
+    const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+    const scrambleCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+    function setCompletionWord(word) {
+        completionTitle.replaceChildren(...Array.from(word, (character, index) => {
+            const letter = document.createElement('span');
+            letter.className = 'completion-letter';
+            letter.style.setProperty('--letter-index', index);
+            letter.textContent = character === ' ' ? '\u00a0' : character;
+            letter.setAttribute('aria-hidden', 'true');
+            return letter;
+        }));
+        completionTitle.setAttribute('aria-label', word);
+    }
+
+    async function morphCompletionWord(from, to) {
+        if (reduceMotion) {
+            setCompletionWord(to);
+            return;
+        }
+
+        const target = Array.from(to);
+        const slots = Math.max(from.length, target.length);
+        const letters = Array.from({ length: slots }, (_, index) => {
+            const letter = document.createElement('span');
+            letter.className = 'completion-letter';
+            letter.style.setProperty('--letter-index', index);
+            letter.setAttribute('aria-hidden', 'true');
+            letter.textContent = from[index] === ' ' ? '\u00a0' : (from[index] || '\u00a0');
+            return letter;
+        });
+        completionTitle.replaceChildren(...letters);
+        completionTitle.classList.add('glitching');
+
+        for (let frame = 0; frame < 13; frame += 1) {
+            letters.forEach((letter, index) => {
+                const settleFrame = 6 + index * 0.55;
+                if (frame >= settleFrame) {
+                    const character = target[index] || ' ';
+                    letter.textContent = character === ' ' ? '\u00a0' : character;
+                    letter.style.opacity = target[index] ? '1' : '0';
+                } else if (frame >= index * 0.35) {
+                    letter.textContent = scrambleCharacters[Math.floor(Math.random() * scrambleCharacters.length)];
+                }
+            });
+            await delay(55);
+        }
+
+        completionTitle.classList.remove('glitching');
+        setCompletionWord(to);
+    }
+
+    async function celebrateCompletion(tablet, card, prompt) {
+        if (celebrationInProgress) return;
+        celebrationInProgress = true;
+        setTabletCompleted(tablet.id, true);
+        prompt.disabled = true;
+        card.classList.add('celebrating');
+
+        completionTitle.classList.remove('glitching', 'success');
+        setCompletionWord('Game Over');
+        celebration.dataset.phase = 'game-over';
+        celebration.setAttribute('aria-hidden', 'false');
+        celebration.classList.add('visible');
+
+        await delay(reduceMotion ? 350 : 1500);
+        await morphCompletionWord('Game Over', 'Success');
+        completionTitle.classList.add('success');
+        celebration.dataset.phase = 'success';
+
+        await delay(reduceMotion ? 450 : 1000);
+        celebration.classList.remove('visible');
+        await delay(reduceMotion ? 10 : 300);
+        celebration.setAttribute('aria-hidden', 'true');
+        celebration.removeAttribute('data-phase');
+        completionTitle.classList.remove('success');
+
+        if (card.isConnected) {
+            card.classList.remove('celebrating');
+            card.classList.add('changing-section');
+            await delay(reduceMotion ? 0 : 180);
+        }
+        celebrationInProgress = false;
+        renderTablets(currentTablets);
+    }
 
     function installMasonry(targetGrid, cards) {
         let animationFrame = 0;
@@ -116,7 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
         prompt.className = 'tablet-open-prompt';
         card.append(toggle, prompt);
 
-        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         const setExpanded = (expanded) => {
             card.setAttribute('aria-expanded', String(expanded));
             toggle.setAttribute('aria-expanded', String(expanded));
@@ -159,6 +248,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const moveToSection = (completed) => {
+            if (completed) {
+                celebrateCompletion(tablet, card, prompt);
+                return;
+            }
             setTabletCompleted(tablet.id, completed);
             prompt.disabled = true;
             card.classList.add('changing-section');

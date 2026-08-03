@@ -47,6 +47,13 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     await page.goto(`${origin}/submit`, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('#submission-form').isVisible(), true);
     assert.equal(await page.locator('.saved-section').count(), 0);
+    assert.equal(await page.locator('.eyebrow').textContent(), 'Inscribe your own tablet for Crunchpuff');
+    assert.equal(await page.locator('h1').textContent(), 'Submit a Spoiler / Riddle');
+    assert.equal(await page.locator('.subtitle').textContent(), 'Mods will review and approve');
+    assert.match(
+      await page.locator('#submit-tablet-btn').evaluate((element) => getComputedStyle(element).fontFamily),
+      /NoitaPixel/
+    );
     await page.locator('#topic-input').fill('Review me');
     await page.locator('#author-input').fill('Public Scribe');
     await page.locator('#riddle-input').fill('This must remain hidden until approved.');
@@ -118,7 +125,22 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('#tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'true');
-    await page.locator('#tablet-grid .riddle-tablet').first().getByRole('button', { name: 'Mark as complete' }).click();
+    const completeButton = page.locator('#tablet-grid .riddle-tablet').first().getByRole('button', { name: 'Mark as complete' });
+    await completeButton.hover();
+    await page.waitForTimeout(220);
+    assert.equal(
+      await completeButton.evaluate((element) => getComputedStyle(element).color),
+      'rgb(240, 192, 64)'
+    );
+    await completeButton.click();
+    await page.locator('#completion-celebration[data-phase="game-over"]').waitFor();
+    assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Game Over');
+    assert.match(
+      await page.locator('#completion-title').evaluate((element) => getComputedStyle(element).fontFamily),
+      /NoitaBlackletter/
+    );
+    await page.locator('#completion-celebration[data-phase="success"]').waitFor({ timeout: 4000 });
+    assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
     await page.locator('#completed-tablet-grid .riddle-tablet').waitFor();
     assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 4);
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -130,6 +152,8 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     await page.locator('#approve-password').fill('browser-password');
     await page.getByRole('button', { name: 'Enter' }).click();
     await page.locator('#moderation-tabs').waitFor();
+    assert.equal(await page.locator('h1').textContent(), 'Riddle Review');
+    assert.ok(parseFloat(await page.getByRole('button', { name: /Pending/ }).evaluate((element) => getComputedStyle(element).fontSize)) >= 13);
     assert.match(await page.getByRole('button', { name: /Pending/ }).textContent(), /1/);
     const pendingRow = page.locator('.moderation-row').first();
     assert.equal(await pendingRow.locator('[name="topic"]').inputValue(), 'Review me');
