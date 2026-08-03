@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const completionClose = document.getElementById('completion-close');
     const completionSound = document.getElementById('completion-sound');
     const ancientSound = document.getElementById('ancient-sound');
+    const tabletOpenSound = document.getElementById('tablet-open-sound');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let currentTablets = [];
     let stopLayouts = () => {};
@@ -108,18 +109,19 @@ document.addEventListener('DOMContentLoaded', () => {
         celebration.removeAttribute('data-phase');
         completionTitle.classList.remove('rolling', 'success');
 
-        if (session.card.isConnected) {
+        if (!session.tabletMoved && session.card.isConnected) {
             session.card.classList.remove('celebrating');
             session.card.classList.add('changing-section');
             await delay(reduceMotion ? 0 : 180);
         }
         celebrationInProgress = false;
-        renderTablets(currentTablets);
+        if (!session.tabletMoved) renderTablets(currentTablets);
     }
 
     async function celebrateCompletion(tablet, card, prompt) {
         if (celebrationInProgress) return;
         celebrationInProgress = true;
+        stopAudio(tabletOpenSound);
         setTabletCompleted(tablet.id, true);
         prompt.disabled = true;
         card.classList.add('celebrating');
@@ -128,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card,
             dismissed: false,
             deathEndedHandler: null,
+            tabletMoved: false,
             ancientTrack: ancientTracks[Math.random() < 0.5 ? 0 : 1]
         };
         const showGameOver = Math.random() < 0.5;
@@ -136,6 +139,8 @@ document.addEventListener('DOMContentLoaded', () => {
         completionTitle.classList.remove('rolling', 'success');
         celebration.setAttribute('aria-hidden', 'false');
         celebration.classList.add('visible');
+        renderTablets(currentTablets);
+        session.tabletMoved = true;
 
         if (!showGameOver) {
             setCompletionWord('Success');
@@ -286,6 +291,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const openTablet = () => {
             if (card.classList.contains('revealed') || card.classList.contains('revealing')) return;
+            stopAudio(tabletOpenSound);
+            tabletOpenSound.volume = 0.55;
+            tabletOpenSound.play().catch(() => {});
             setTabletRevealed(tablet.id, true);
             card.classList.add('revealing');
             setExpanded(true);

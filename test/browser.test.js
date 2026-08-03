@@ -90,6 +90,10 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
       'none'
     );
     await cards.first().click({ position: { x: 6, y: 6 } });
+    await page.waitForFunction(() => {
+      const audio = document.querySelector('#tablet-open-sound');
+      return !audio.paused && audio.currentTime > 0;
+    });
     await cards.first().evaluate((element) => new Promise((resolve) => {
       const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);
       done();
@@ -170,7 +174,8 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     assert.equal(await page.locator('#completion-title .completion-letter').count(), 0);
     assert.equal(await page.locator('#completion-celebration').evaluate((element) => element.classList.contains('dismissible')), true);
     assert.equal(await page.locator('#completion-close').isVisible(), true);
-    assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 0);
+    assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 1);
+    assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 4);
     await page.locator('#completion-sound').evaluate((audio) => {
       audio.currentTime = Math.max(0, audio.duration - 0.12);
     });
@@ -179,7 +184,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
       return audio.src.includes('noita-ancient-01.mp3') && !audio.paused && audio.currentTime > 0;
     });
     await page.locator('#completion-celebration').click({ position: { x: 20, y: 20 } });
-    await page.locator('#completed-tablet-grid .riddle-tablet').waitFor();
+    await page.waitForFunction(() => document.querySelector('#completion-celebration').getAttribute('aria-hidden') === 'true');
     assert.equal(await page.locator('#completion-celebration').getAttribute('aria-hidden'), 'true');
     assert.equal(await page.locator('#completion-sound').evaluate((audio) => audio.paused && audio.currentTime === 0), true);
     assert.equal(await page.locator('#ancient-sound').evaluate((audio) => audio.paused && audio.currentTime === 0), true);
@@ -194,6 +199,8 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     await directCompleteButton.click();
     await page.locator('#completion-celebration[data-phase="success"]').waitFor();
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
+    assert.equal(await page.locator('#completed-tablet-grid .riddle-tablet').count(), 1);
+    assert.equal(await page.locator('#tablet-grid .riddle-tablet').count(), 4);
     assert.equal(await page.locator('#completion-sound').evaluate((audio) => audio.paused), true);
     await page.waitForFunction(() => {
       const audio = document.querySelector('#ancient-sound');
