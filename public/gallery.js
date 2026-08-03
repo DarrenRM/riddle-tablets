@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activeCelebration !== session || session.dismissed) return;
         ancientSound.src = session.ancientTrack;
         ancientSound.currentTime = 0;
-        ancientSound.volume = 0.62;
+        ancientSound.volume = 0.31;
         ancientSound.play().catch(() => {});
     }
 

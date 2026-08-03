@@ -193,6 +193,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
       const audio = document.querySelector('#ancient-sound');
       return audio.src.includes('noita-ancient-01.mp3') && !audio.paused && audio.currentTime > 0;
     });
+    assert.equal(await page.locator('#ancient-sound').evaluate((audio) => audio.volume), 0.31);
     await page.locator('#completion-celebration').click({ position: { x: 20, y: 20 } });
     await page.waitForFunction(() => document.querySelector('#completion-celebration').getAttribute('aria-hidden') === 'true');
     assert.equal(await page.locator('#completion-celebration').getAttribute('aria-hidden'), 'true');
@@ -232,6 +233,7 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
       const audio = document.querySelector('#ancient-sound');
       return audio.src.includes('noita-ancient-02.mp3') && !audio.paused && audio.currentTime > 0;
     });
+    assert.equal(await page.locator('#ancient-sound').evaluate((audio) => audio.volume), 0.31);
     await page.locator('#completion-celebration.dismissible').waitFor();
     await page.locator('#completion-close').click();
     await page.locator('#completed-tablet-grid .riddle-tablet').waitFor();
