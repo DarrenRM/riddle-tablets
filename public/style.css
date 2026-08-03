@@ -236,7 +236,7 @@ button:disabled {
 }
 
 .revealed .tablet-open-prompt {
-    color: var(--green);
+    color: var(--muted);
     animation: none;
 }
 
