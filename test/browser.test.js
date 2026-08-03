@@ -135,10 +135,27 @@ test('public submission, moderation, masonry, reveal, and completion flows work'
     await completeButton.click();
     await page.locator('#completion-celebration[data-phase="game-over"]').waitFor();
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Game Over');
+    assert.notEqual(
+      await page.locator('#completion-celebration').evaluate((element) => getComputedStyle(element).backdropFilter),
+      'none'
+    );
+    const pulseCenter = await page.locator('.completion-pulse').evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    });
+    assert.ok(Math.abs(pulseCenter.x - 720) < 1);
+    assert.ok(Math.abs(pulseCenter.y - 500) < 1);
+    assert.equal(await page.locator('#completion-sound').evaluate((element) => element.paused), false);
     assert.match(
       await page.locator('#completion-title').evaluate((element) => getComputedStyle(element).fontFamily),
       /NoitaBlackletter/
     );
+    await page.locator('#completion-celebration[data-phase="scrambling"]').waitFor({ timeout: 3000 });
+    const letterPositions = await page.locator('#completion-title .completion-letter').evaluateAll((letters) => (
+      letters.map((letter) => letter.getBoundingClientRect().left)
+    ));
+    assert.equal(letterPositions.length, 9);
+    assert.ok(letterPositions.every((position, index) => index === 0 || position > letterPositions[index - 1]));
     await page.locator('#completion-celebration[data-phase="success"]').waitFor({ timeout: 4000 });
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
     await page.locator('#completed-tablet-grid .riddle-tablet').waitFor();

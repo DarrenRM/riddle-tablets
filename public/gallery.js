@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const empty = document.getElementById('archive-empty');
     const celebration = document.getElementById('completion-celebration');
     const completionTitle = document.getElementById('completion-title');
+    const completionSound = document.getElementById('completion-sound');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let currentTablets = [];
     let stopLayouts = () => {};
@@ -23,10 +24,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const scrambleCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
     function setCompletionWord(word) {
-        completionTitle.replaceChildren(...Array.from(word, (character, index) => {
+        completionTitle.replaceChildren(...Array.from(word, (character) => {
             const letter = document.createElement('span');
             letter.className = 'completion-letter';
-            letter.style.setProperty('--letter-index', index);
             letter.textContent = character === ' ' ? '\u00a0' : character;
             letter.setAttribute('aria-hidden', 'true');
             return letter;
@@ -40,35 +40,35 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const source = Array.from(from);
         const target = Array.from(to);
-        const slots = Math.max(from.length, target.length);
+        const slots = Math.max(source.length, target.length);
+        const sourceOffset = Math.floor((slots - source.length) / 2);
+        const targetOffset = Math.floor((slots - target.length) / 2);
         const letters = Array.from({ length: slots }, (_, index) => {
             const letter = document.createElement('span');
             letter.className = 'completion-letter';
-            letter.style.setProperty('--letter-index', index);
             letter.setAttribute('aria-hidden', 'true');
-            letter.textContent = from[index] === ' ' ? '\u00a0' : (from[index] || '\u00a0');
+            const sourceCharacter = source[index - sourceOffset] || ' ';
+            letter.textContent = sourceCharacter === ' ' ? '\u00a0' : sourceCharacter;
             return letter;
         });
         completionTitle.replaceChildren(...letters);
-        completionTitle.classList.add('glitching');
 
-        for (let frame = 0; frame < 13; frame += 1) {
-            letters.forEach((letter, index) => {
-                const settleFrame = 6 + index * 0.55;
-                if (frame >= settleFrame) {
-                    const character = target[index] || ' ';
-                    letter.textContent = character === ' ' ? '\u00a0' : character;
-                    letter.style.opacity = target[index] ? '1' : '0';
-                } else if (frame >= index * 0.35) {
+        await Promise.all(letters.map(async (letter, index) => {
+            await delay(index * 48);
+            for (let roll = 0; roll < 7; roll += 1) {
+                if (roll > 0 || letter.textContent.trim()) {
                     letter.textContent = scrambleCharacters[Math.floor(Math.random() * scrambleCharacters.length)];
                 }
-            });
-            await delay(55);
-        }
+                await delay(44);
+            }
+            const character = target[index - targetOffset];
+            letter.textContent = character || '\u00a0';
+            letter.style.opacity = character ? '1' : '0';
+        }));
 
-        completionTitle.classList.remove('glitching');
-        setCompletionWord(to);
+        completionTitle.setAttribute('aria-label', to);
     }
 
     async function celebrateCompletion(tablet, card, prompt) {
@@ -78,13 +78,17 @@ document.addEventListener('DOMContentLoaded', () => {
         prompt.disabled = true;
         card.classList.add('celebrating');
 
-        completionTitle.classList.remove('glitching', 'success');
+        completionTitle.classList.remove('success');
         setCompletionWord('Game Over');
         celebration.dataset.phase = 'game-over';
         celebration.setAttribute('aria-hidden', 'false');
         celebration.classList.add('visible');
+        completionSound.currentTime = 0;
+        completionSound.volume = 0.72;
+        completionSound.play().catch(() => {});
 
         await delay(reduceMotion ? 350 : 1500);
+        celebration.dataset.phase = 'scrambling';
         await morphCompletionWord('Game Over', 'Success');
         completionTitle.classList.add('success');
         celebration.dataset.phase = 'success';

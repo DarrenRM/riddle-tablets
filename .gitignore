@@ -8,3 +8,4 @@ server.stdout.log
 server.stderr.log
 artifacts/
 Noita Blackletter-Regular (new).zip
+*.obj
