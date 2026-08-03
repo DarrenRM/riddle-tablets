@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (card.classList.contains('revealing')) return;
 
             if (card.classList.contains('revealed')) {
+                prompt.textContent = 'Awaken inscription';
                 card.classList.remove('revealed');
                 card.setAttribute('aria-expanded', 'false');
                 setTabletRevealed(tablet.id, false);
@@ -93,7 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
             window.setTimeout(() => {
                 card.classList.remove('revealing');
                 card.classList.add('revealed');
-                prompt.textContent = 'Awaken inscription';
             }, reduceMotion ? 0 : 1850);
         });
         return card;

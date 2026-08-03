@@ -193,13 +193,17 @@ button:disabled {
 
 .tablet-open-prompt {
     display: block;
+    max-height: 2.5rem;
     margin-top: 1.3rem;
+    overflow: hidden;
     color: #555563;
     font-family: 'NoitaPixel', monospace;
     font-size: 0.62rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+    opacity: 1;
     animation: inscription-breathe 4s ease-in-out infinite;
+    transition: max-height 420ms cubic-bezier(0.22, 1, 0.36, 1), margin-top 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 240ms ease;
 }
 
 .revealing .tablet-open-prompt {
@@ -208,7 +212,11 @@ button:disabled {
 }
 
 .revealed .tablet-open-prompt {
-    display: none;
+    max-height: 0;
+    margin-top: 0;
+    opacity: 0;
+    pointer-events: none;
+    animation: none;
 }
 
 .riddle-author-name {

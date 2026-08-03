@@ -81,6 +81,23 @@ test('save, edit, compact accordion reveal, glyph flicker, and local reveal rest
     const openBox = await cards.first().boundingBox();
     assert.ok(openBox.height > closedBox.height);
     assert.equal(
+      await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).display),
+      'block'
+    );
+    await cards.first().locator('.tablet-open-prompt').evaluate((element) => new Promise((resolve) => {
+      const settled = () => parseFloat(getComputedStyle(element).maxHeight) < 0.5
+        ? resolve()
+        : requestAnimationFrame(settled);
+      settled();
+    }));
+    assert.ok(
+      parseFloat(await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).maxHeight)) < 0.5
+    );
+    assert.equal(
+      await cards.first().locator('.tablet-open-prompt').evaluate((element) => getComputedStyle(element).opacity),
+      '0'
+    );
+    assert.equal(
       await cards.first().locator('.riddle-topic').evaluate((element) => getComputedStyle(element).fontSize),
       await cards.first().locator('.riddle-text').evaluate((element) => getComputedStyle(element).fontSize)
     );
