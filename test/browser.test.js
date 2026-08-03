@@ -49,14 +49,19 @@ test('save, edit, compact accordion reveal, glyph flicker, and local reveal rest
     await page.locator('#save-tablet-btn').click();
     await page.getByText('Saved changes to “Moonlight”.').waitFor();
     await save('Fire', 'Ash Keeper', 'I die when I drink.');
-    await save('Echo', 'Cave Listener', 'I never speak first.');
+    await save('Echo', 'Cave Listener', Array(120).fill('you can').join(' '));
+    await save('Newest', 'Layout Scribe', 'I should sit directly beneath the first tablet.');
     await save('Time', 'Last Scribe', 'I am held by none.');
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     const cards = page.locator('.riddle-tablet');
-    assert.equal(await cards.count(), 4);
+    assert.equal(await cards.count(), 5);
     const boxes = await Promise.all(Array.from({ length: 4 }, (_, index) => cards.nth(index).boundingBox()));
     assert.ok(boxes.every((box) => box && Math.abs(box.y - boxes[0].y) < 1));
+    const fifthClosedBox = await cards.nth(4).boundingBox();
+    const gridGap = await page.locator('#tablet-grid').evaluate((element) => parseFloat(getComputedStyle(element).columnGap));
+    assert.ok(Math.abs(fifthClosedBox.x - boxes[0].x) < 1);
+    assert.ok(Math.abs(fifthClosedBox.y - (boxes[0].y + boxes[0].height + gridGap)) < 2);
     assert.equal(await cards.first().getAttribute('aria-expanded'), 'false');
     const closedBox = await cards.first().boundingBox();
     assert.ok(closedBox.height < 220);
@@ -73,6 +78,22 @@ test('save, edit, compact accordion reveal, glyph flicker, and local reveal rest
       null,
       { timeout: 8500 }
     );
+
+    await cards.nth(2).click();
+    await cards.nth(2).evaluate((element) => new Promise((resolve) => {
+      const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);
+      done();
+    }));
+    await page.waitForTimeout(500);
+    const longBox = await cards.nth(2).boundingBox();
+    const firstAfterLongReveal = await cards.first().boundingBox();
+    const fifthAfterLongReveal = await cards.nth(4).boundingBox();
+    assert.ok(longBox.height > 700);
+    assert.ok(Math.abs(fifthAfterLongReveal.y - (firstAfterLongReveal.y + firstAfterLongReveal.height + gridGap)) < 2);
+    assert.ok(fifthAfterLongReveal.y < longBox.y + longBox.height - 300);
+    await cards.nth(2).click();
+    await page.waitForTimeout(700);
+
     await cards.first().click();
     await cards.first().evaluate((element) => new Promise((resolve) => {
       const done = () => element.classList.contains('revealed') ? resolve() : requestAnimationFrame(done);

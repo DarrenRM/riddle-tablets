@@ -5,6 +5,58 @@ import { flickerGlyphText, inscribeText } from './tablet-reveal.js';
 document.addEventListener('DOMContentLoaded', () => {
     const grid = document.getElementById('tablet-grid');
     const empty = document.getElementById('archive-empty');
+    let stopMasonry = () => {};
+
+    function installMasonry(cards) {
+        stopMasonry();
+        let animationFrame = 0;
+
+        const columnCount = () => {
+            if (window.matchMedia('(max-width: 620px)').matches) return 1;
+            if (window.matchMedia('(max-width: 1100px)').matches) return 2;
+            return 4;
+        };
+
+        const layout = () => {
+            animationFrame = 0;
+            if (!cards.length || grid.classList.contains('hidden')) return;
+            const columns = columnCount();
+            const gap = parseFloat(getComputedStyle(grid).columnGap) || 19.2;
+            const cardWidth = (grid.clientWidth - gap * (columns - 1)) / columns;
+            const columnBottoms = Array(columns).fill(0);
+
+            cards.forEach((card, index) => {
+                const column = index % columns;
+                card.style.width = `${cardWidth}px`;
+                card.style.left = `${column * (cardWidth + gap)}px`;
+                card.style.top = `${columnBottoms[column]}px`;
+                columnBottoms[column] += card.offsetHeight + gap;
+            });
+
+            grid.style.height = `${Math.max(0, ...columnBottoms) - gap}px`;
+            grid.classList.add('masonry-ready');
+        };
+
+        const scheduleLayout = () => {
+            if (!animationFrame) animationFrame = window.requestAnimationFrame(layout);
+        };
+        const observer = typeof ResizeObserver === 'function'
+            ? new ResizeObserver(scheduleLayout)
+            : null;
+        if (observer) {
+            observer.observe(grid);
+            cards.forEach((card) => observer.observe(card));
+        }
+        window.addEventListener('resize', scheduleLayout);
+        document.fonts.ready.then(scheduleLayout);
+        scheduleLayout();
+
+        stopMasonry = () => {
+            if (animationFrame) window.cancelAnimationFrame(animationFrame);
+            if (observer) observer.disconnect();
+            window.removeEventListener('resize', scheduleLayout);
+        };
+    }
 
     function createTablet(tablet, wasRevealed) {
         const card = document.createElement('button');
@@ -103,10 +155,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const tablets = await listTablets();
             const revealed = loadRevealedTabletIds();
-            grid.replaceChildren(...tablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id))));
+            const cards = tablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id)));
+            grid.classList.remove('masonry-ready');
+            grid.replaceChildren(...cards);
             empty.classList.toggle('hidden', tablets.length > 0);
             grid.classList.toggle('hidden', tablets.length === 0);
+            installMasonry(cards);
         } catch {
+            stopMasonry();
             grid.replaceChildren();
             empty.classList.remove('hidden');
             empty.querySelector('h1').textContent = 'The tablets could not be summoned';
