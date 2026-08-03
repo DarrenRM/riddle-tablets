@@ -6,3 +6,4 @@
 data/tablets.local.json
 server.stdout.log
 server.stderr.log
+artifacts/

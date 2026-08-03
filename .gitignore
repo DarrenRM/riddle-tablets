@@ -6,3 +6,4 @@ node_modules/
 data/tablets.local.json
 server.stdout.log
 server.stderr.log
+artifacts/
