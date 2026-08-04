@@ -52,12 +52,7 @@ vercel
 vercel --prod
 ```
 
-## Local Noita audio rendering
-
-`tools/noita-audio-renderer` renders an authored event through the FMOD runtime
-and banks in the local Noita installation, then exports a web-ready MP3 or WAV.
-The site receives only the exported audio file; FMOD, its DLLs, and Noita's bank
-files are never included in the deployment.
-
-See [`tools/noita-audio-renderer/README.md`](tools/noita-audio-renderer/README.md)
-for requirements and examples.
+The local Noita/FMOD audio-authoring tools are intentionally kept outside this
+public repository. The deployed site includes only the exported web-ready audio
+files under `public/audio/`; FMOD, its DLLs, and Noita's bank files are not part
+of the deployment.
