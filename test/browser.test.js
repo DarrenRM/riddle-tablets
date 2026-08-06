@@ -44,8 +44,16 @@ test('topic creation, submission, moderation, presentation, and local group comp
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('#waiting-state').isVisible(), true);
-    assert.equal(await page.locator('#waiting-state h1').textContent(), 'The archive waits');
+    assert.equal(await page.locator('#waiting-state h1').textContent(), 'Hamis Waits');
     assert.equal(await page.locator('#waiting-state p').textContent(), 'No new topic has awakened.');
+    assert.match(
+      await page.locator('#waiting-state h1').evaluate((element) => getComputedStyle(element).fontFamily),
+      /NoitaPixel/
+    );
+    assert.match(
+      await page.locator('#waiting-state h1').evaluate((element) => getComputedStyle(element).color),
+      /71, 226, 136/
+    );
     assert.match(
       await page.locator('.longleg-sprite').evaluate((element) => getComputedStyle(element).backgroundImage),
       /longleg\.png/
@@ -72,10 +80,21 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.match(submissionUrl, new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/submit/[A-Za-z0-9_-]+$`));
     await page.locator('#create-group-success').getByRole('button', { name: 'Done' }).click();
     assert.equal(await page.locator('.group-list-item').count(), 1);
+    const topicControlBoxes = await Promise.all([
+      page.locator('#group-topic-input').boundingBox(),
+      page.locator('#save-group-topic').boundingBox(),
+      page.locator('#group-status-badge').boundingBox()
+    ]);
+    const topicControlCenters = topicControlBoxes.map((box) => box.y + (box.height / 2));
+    assert.ok(Math.max(...topicControlCenters) - Math.min(...topicControlCenters) < 1);
 
     await page.goto(submissionUrl, { waitUntil: 'domcontentloaded' });
     await page.locator('#submission-form').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#submission-topic').textContent(), 'The Work');
+    assert.match(
+      await page.locator('.submit-container h1').evaluate((element) => getComputedStyle(element).color),
+      /71, 226, 136/
+    );
     assert.equal(await page.locator('[name="topic"]').count(), 0);
     await page.locator('#author-input').fill('First Scribe');
     await page.locator('#riddle-input').fill('Look beneath the mountain.');
@@ -132,6 +151,8 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('#waiting-state').isVisible(), true);
     assert.equal(await page.locator('#solved-topic-heading').textContent(), 'Solved: The Work');
     assert.equal(await page.locator('#solved-tablet-grid .riddle-tablet').count(), 2);
+    const solvedHeadingBox = await page.locator('#solved-topic-heading').boundingBox();
+    assert.ok(Math.abs((solvedHeadingBox.x + (solvedHeadingBox.width / 2)) - 720) < 1);
     assert.equal(await page.locator('#active-topic').isVisible(), false);
     await page.locator('#completion-celebration.dismissible').waitFor();
     await page.locator('#completion-close').click();

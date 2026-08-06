@@ -365,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const { group, tablets } = currentPresentation;
         if (!group) {
             waiting.classList.remove('hidden');
-            document.title = 'The archive waits · Riddle Tablets';
+            document.title = 'Hamis Waits · Riddle Tablets';
             archiveLinkWrap.classList.remove('hidden');
             return;
         }

@@ -581,6 +581,11 @@ button:disabled {
     font-size: clamp(1.9rem, 4vw, 2.75rem);
 }
 
+.submit-container h1 {
+    color: var(--green);
+    text-shadow: 0 0 10px rgba(71, 226, 136, 0.24);
+}
+
 #submit-tablet-btn {
     font-family: 'NoitaPixel', monospace;
     font-size: 0.78rem;
@@ -1061,18 +1066,21 @@ textarea {
 }
 
 .solved-topic-heading-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    justify-content: center;
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
 
 .solved-topic-heading-row .topic-heading {
+    grid-column: 2;
     margin: 0;
 }
 
 .return-topic-button {
+    grid-column: 3;
+    justify-self: start;
     padding: 0.5rem 0.7rem;
     border-color: #494451;
     background: rgba(28, 26, 34, 0.82);
@@ -1088,6 +1096,15 @@ textarea {
 .waiting-state {
     min-height: 320px;
     margin: 3rem auto 5rem;
+}
+
+.waiting-state h1 {
+    color: var(--green);
+    font-family: 'NoitaPixel', monospace;
+    font-size: clamp(1rem, 3vw, 1.5rem);
+    letter-spacing: 0.12em;
+    text-shadow: 0 0 10px rgba(71, 226, 136, 0.24);
+    text-transform: uppercase;
 }
 
 .longleg-stage {
@@ -1347,11 +1364,10 @@ textarea {
 
 .group-topic-editor {
     display: grid;
-    flex: 1 1 320px;
     gap: 0.3rem;
 }
 
-.group-topic-editor > span,
+.group-topic-editor > label,
 .group-link-panel > label {
     color: #6e6877;
     font-size: 0.68rem;
@@ -1362,6 +1378,11 @@ textarea {
 .group-topic-editor input,
 .group-link-row input {
     padding: 0.72rem;
+}
+
+.group-title-row input {
+    flex: 1 1 320px;
+    min-width: 0;
 }
 
 .group-link-panel {
@@ -1470,9 +1491,13 @@ textarea {
 }
 
 @media (max-width: 620px) {
-    .solved-topic-heading-row { align-items: stretch; flex-direction: column; }
+    .solved-topic-heading-row { display: flex; align-items: stretch; flex-direction: column; }
+    .solved-topic-heading-row .topic-heading { text-align: center; }
+    .return-topic-button { align-self: center; }
     .group-list { grid-template-columns: 1fr; }
     .approve-header-actions { align-items: flex-start; }
+    .group-title-row { align-items: stretch; flex-direction: column; }
+    .group-title-row > * { width: 100%; text-align: center; }
     .group-link-row > *,
     .group-controls > *,
     .dialog-actions-wide > * { width: 100%; text-align: center; }
