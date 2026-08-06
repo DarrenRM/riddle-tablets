@@ -1,15 +1,21 @@
 # Riddle Tablets
 
-A moderated gallery of animated community riddle tablets.
+A moderated, episodic gallery of animated community riddle tablets.
 
 ## Workflow
 
-- `/` shows only approved inscriptions.
-- `/submit` is a public submission form. It never lists other submissions.
-- `/approve` is password-gated and provides inline Pending, Published, and Rejected moderation queues.
-- `/create` redirects to `/submit` for backward compatibility.
+- `/approve` is password-gated and organizes moderation around topic groups.
+- A moderator creates a topic and copies its automatically generated submission link.
+- The topic-specific form fixes the topic and accepts only an author name and clue.
+- Pending clues remain private until a moderator approves them.
+- Approved clues can be edited and ordered within their group.
+- Exactly one topic group can be active on `/` at a time.
+- Activating a topic archives the previously active topic.
+- `/archive` lists previously presented topics.
 
-Public submissions are validated, checked by a honeypot, and rate-limited by IP. Approval publishes the moderator's inline edits. Rejected inscriptions are retained until restored or permanently deleted. Published inscriptions can be edited or unpublished.
+Tablet reveal state and topic completion are stored in each visitor's browser. Marking a topic solved moves all its clues into a local `Solved: <topic>` section without changing anyone else's experience.
+
+Public submissions are validated, checked by a honeypot, and rate-limited by IP. Rejected clues are retained until restored or permanently deleted. Approved clues can be edited or returned to the rejected queue.
 
 ## Local preview
 
@@ -23,10 +29,12 @@ npm start
 Open:
 
 - Gallery: <http://127.0.0.1:3000/>
-- Public submission: <http://127.0.0.1:3000/submit>
 - Password-gated moderation: <http://127.0.0.1:3000/approve>
+- Topic archive: <http://127.0.0.1:3000/archive>
 
-Without Upstash credentials, local published tablets and submissions persist to ignored JSON files under `data/`.
+Create a topic from the moderation page to obtain its submission URL. The generic `/submit` page intentionally does not accept clues without a topic-specific token.
+
+Without Upstash credentials, local groups, approved tablets, and submissions persist to ignored JSON files under `data/`.
 
 ## Vercel deployment
 

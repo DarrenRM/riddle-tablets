@@ -6,6 +6,7 @@ const dotenv = require('dotenv');
 const express = require('express');
 const { Redis } = require('@upstash/redis');
 const {
+  createDefaultGroupRepository,
   createDefaultSubmissionRepository,
   createDefaultTabletRepository,
   resolveRedisCredentials
@@ -39,7 +40,7 @@ class RateLimiter {
 }
 
 class RedisWindowRateLimiter {
-  constructor({ url, token, max = 10, windowSeconds = 60 * 60, prefix = 'riddle-submit-rate:v1' }) {
+  constructor({ url, token, max = 10, windowSeconds = 60 * 60, prefix = 'riddle-submit-rate:v2' }) {
     this.redis = new Redis({ url, token, enableTelemetry: false });
     this.max = max;
     this.windowSeconds = windowSeconds;
@@ -110,6 +111,19 @@ function createDefaultSubmissionLimiter(config) {
   });
 }
 
+function publicGroup(group) {
+  if (!group) return null;
+  const { submissionToken, ...safe } = group;
+  return safe;
+}
+
+function httpError(code, message, status = 400) {
+  const error = new Error(message);
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
 function createApp(options = {}) {
   const optionConfig = options.config || {};
   const config = {
@@ -127,6 +141,7 @@ function createApp(options = {}) {
   };
   if (!config.moderatorPassword && optionConfig.createPassword) config.moderatorPassword = optionConfig.createPassword;
 
+  const groups = options.groupRepository || createDefaultGroupRepository(__dirname);
   const repository = options.tabletRepository || createDefaultTabletRepository(__dirname);
   const submissions = options.submissionRepository || createDefaultSubmissionRepository(__dirname);
   const loginLimiter = options.loginLimiter || new RateLimiter();
@@ -158,8 +173,11 @@ function createApp(options = {}) {
   };
 
   const sendKnownError = (error, res, next) => {
-    if (error && (error.code === 'invalid_tablet' || error.code === 'invalid_tablet_id')) {
-      return res.status(400).json({ error: error.code, message: error.message });
+    if (error && ['invalid_tablet', 'invalid_tablet_id', 'invalid_group', 'group_required'].includes(error.code)) {
+      return res.status(error.status || 400).json({ error: error.code, message: error.message });
+    }
+    if (error && error.code === 'group_closed') {
+      return res.status(409).json({ error: error.code, message: error.message });
     }
     if (error && error.code === 'record_not_found') {
       return res.status(404).json({ error: error.code, message: error.message });
@@ -167,17 +185,86 @@ function createApp(options = {}) {
     return next(error);
   };
 
-  app.get('/api/tablets', async (req, res, next) => {
+  const presentationFor = async (group) => ({
+    group: publicGroup(group),
+    tablets: group ? await repository.list(group.id) : []
+  });
+
+  const groupSummary = async (group) => {
+    const [pending, rejected, approved] = await Promise.all([
+      submissions.list('pending', group.id),
+      submissions.list('rejected', group.id),
+      repository.list(group.id)
+    ]);
+    return {
+      ...group,
+      counts: { pending: pending.length, approved: approved.length, rejected: rejected.length }
+    };
+  };
+
+  app.get('/api/presentation', async (req, res, next) => {
     try {
       res.setHeader('Cache-Control', 'no-store');
-      res.json({ tablets: await repository.list() });
+      res.json(await presentationFor(await groups.getActive()));
     } catch (error) {
       next(error);
     }
   });
 
-  app.post('/api/submissions', async (req, res, next) => {
+  app.get('/api/topics', async (req, res, next) => {
     try {
+      const visible = (await groups.list()).filter((group) => ['active', 'archived'].includes(group.status));
+      const topics = await Promise.all(visible.map(async (group) => ({
+        ...publicGroup(group),
+        tabletCount: (await repository.list(group.id)).length
+      })));
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ topics });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/topics/:id', async (req, res, next) => {
+    try {
+      const group = await groups.get(req.params.id);
+      if (!group || !['active', 'archived'].includes(group.status)) {
+        return res.status(404).json({ error: 'record_not_found', message: 'That topic is not available.' });
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(await presentationFor(group));
+    } catch (error) {
+      return sendKnownError(error, res, next);
+    }
+  });
+
+  // Backward-compatible public read used by any stale gallery tab.
+  app.get('/api/tablets', async (req, res, next) => {
+    try {
+      const group = await groups.getActive();
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ tablets: group ? await repository.list(group.id) : [], group: publicGroup(group) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/submission-groups/:token', async (req, res, next) => {
+    try {
+      const group = await groups.getByToken(req.params.token);
+      if (!group) return res.status(404).json({ error: 'record_not_found', message: 'That submission link is not available.' });
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json({ group: { topic: group.topic }, accepting: group.status === 'open' });
+    } catch (error) {
+      return sendKnownError(error, res, next);
+    }
+  });
+
+  app.post('/api/submission-groups/:token/submissions', async (req, res, next) => {
+    try {
+      const group = await groups.getByToken(req.params.token);
+      if (!group) throw httpError('record_not_found', 'That submission link is not available.', 404);
+      if (group.status !== 'open') throw httpError('group_closed', 'Submissions for this topic are closed.', 409);
       const body = req.body || {};
       if (typeof body.website === 'string' && body.website.trim()) {
         return res.status(202).json({ submitted: true });
@@ -190,12 +277,22 @@ function createApp(options = {}) {
           message: 'Too many submissions from this connection. Please return later.'
         });
       }
-      const submission = await submissions.create(body);
+      const submission = await submissions.create({
+        groupId: group.id,
+        topic: group.topic,
+        author: body.author,
+        riddle: body.riddle
+      });
       return res.status(202).json({ submitted: true, submission: { id: submission.id } });
     } catch (error) {
       return sendKnownError(error, res, next);
     }
   });
+
+  app.post('/api/submissions', (req, res) => res.status(400).json({
+    error: 'group_required',
+    message: 'Use the submission link supplied for a specific topic.'
+  }));
 
   app.get('/api/moderation/status', (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -227,23 +324,173 @@ function createApp(options = {}) {
     return res.json({ authenticated: true });
   });
 
-  app.get('/api/moderation/queue', requireModeratorAccess, async (req, res, next) => {
+  app.get('/api/moderation/groups', requireModeratorAccess, async (req, res, next) => {
     try {
-      const [pending, rejected, published] = await Promise.all([
-        submissions.list('pending'),
-        submissions.list('rejected'),
-        repository.list()
+      const [records, allTablets, allSubmissions] = await Promise.all([
+        groups.list(),
+        repository.list(),
+        submissions.list()
       ]);
+      const summaries = await Promise.all(records.map(groupSummary));
       res.setHeader('Cache-Control', 'no-store');
-      res.json({ pending, rejected, published });
+      res.json({
+        groups: summaries,
+        legacy: {
+          tablets: allTablets.filter((tablet) => !tablet.groupId).length,
+          submissions: allSubmissions.filter((submission) => !submission.groupId).length
+        }
+      });
     } catch (error) {
       next(error);
     }
   });
 
+  app.post('/api/moderation/groups', requireModeratorAccess, async (req, res, next) => {
+    try {
+      const group = await groups.create({ topic: req.body && req.body.topic });
+      res.status(201).json({ group: await groupSummary(group) });
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  });
+
+  app.put('/api/moderation/groups/:id', requireModeratorAccess, async (req, res, next) => {
+    try {
+      const group = await groups.update(req.params.id, { topic: req.body && req.body.topic });
+      const [tablets, pending, rejected] = await Promise.all([
+        repository.list(group.id),
+        submissions.list('pending', group.id),
+        submissions.list('rejected', group.id)
+      ]);
+      await Promise.all([
+        ...tablets.map((tablet) => repository.save({ ...tablet, topic: group.topic }, tablet.id)),
+        ...pending.map((submission) => submissions.update(submission.id, { ...submission, topic: group.topic })),
+        ...rejected.map((submission) => submissions.update(submission.id, { ...submission, topic: group.topic }))
+      ]);
+      res.json({ group: await groupSummary(group) });
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  });
+
+  const setGroupStatus = (status) => async (req, res, next) => {
+    try {
+      if (status === 'active' && (await repository.list(req.params.id)).length === 0) {
+        throw httpError('invalid_group', 'Approve at least one clue before activating this topic.');
+      }
+      const group = await groups.setStatus(req.params.id, status);
+      res.json({ group: await groupSummary(group) });
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  };
+
+  app.post('/api/moderation/groups/:id/open', requireModeratorAccess, setGroupStatus('open'));
+  app.post('/api/moderation/groups/:id/close', requireModeratorAccess, setGroupStatus('ready'));
+  app.post('/api/moderation/groups/:id/activate', requireModeratorAccess, setGroupStatus('active'));
+  app.post('/api/moderation/groups/:id/archive', requireModeratorAccess, setGroupStatus('archived'));
+
+  app.post('/api/moderation/groups/:id/rotate-token', requireModeratorAccess, async (req, res, next) => {
+    try {
+      const group = await groups.rotateToken(req.params.id);
+      res.json({ group: await groupSummary(group) });
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  });
+
+  app.get('/api/moderation/groups/:id/queue', requireModeratorAccess, async (req, res, next) => {
+    try {
+      const group = await groups.get(req.params.id);
+      if (!group) throw httpError('record_not_found', 'That topic no longer exists.', 404);
+      const [pending, rejected, approved] = await Promise.all([
+        submissions.list('pending', group.id),
+        submissions.list('rejected', group.id),
+        repository.list(group.id)
+      ]);
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ group, pending, rejected, approved });
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  });
+
+  app.get('/api/moderation/groups/:id/presentation', requireModeratorAccess, async (req, res, next) => {
+    try {
+      const group = await groups.get(req.params.id);
+      if (!group) throw httpError('record_not_found', 'That topic no longer exists.', 404);
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(await presentationFor(group));
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  });
+
+  app.put('/api/moderation/groups/:id/tablet-order', requireModeratorAccess, async (req, res, next) => {
+    try {
+      const tablets = await repository.list(req.params.id);
+      const ids = req.body && Array.isArray(req.body.ids) ? req.body.ids : [];
+      const expected = new Set(tablets.map((tablet) => tablet.id));
+      if (ids.length !== tablets.length || ids.some((id) => !expected.has(id)) || new Set(ids).size !== ids.length) {
+        throw httpError('invalid_group', 'The clue order is incomplete or invalid.');
+      }
+      const byId = new Map(tablets.map((tablet) => [tablet.id, tablet]));
+      await Promise.all(ids.map((id, index) => repository.save({ ...byId.get(id), position: index }, id)));
+      res.json({ approved: await repository.list(req.params.id) });
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  });
+
+  app.post('/api/moderation/groups/import-legacy', requireModeratorAccess, async (req, res, next) => {
+    try {
+      const [allTablets, allSubmissions, existingGroups] = await Promise.all([
+        repository.list(),
+        submissions.list(),
+        groups.list()
+      ]);
+      const legacyTablets = allTablets.filter((tablet) => !tablet.groupId);
+      const legacySubmissions = allSubmissions.filter((submission) => !submission.groupId);
+      const topics = new Map();
+      [...legacyTablets, ...legacySubmissions].forEach((record) => {
+        const topic = record.topic || 'Imported topic';
+        if (!topics.has(topic)) topics.set(topic, { tablets: [], submissions: [] });
+        topics.get(topic)[record.status ? 'submissions' : 'tablets'].push(record);
+      });
+      let imported = 0;
+      for (const [topic, records] of topics) {
+        let group = existingGroups.find((candidate) => candidate.topic.toLocaleLowerCase() === topic.toLocaleLowerCase());
+        if (!group) group = await groups.create({ topic, status: records.tablets.length ? 'archived' : 'open' });
+        await Promise.all(records.tablets.map((tablet, index) => repository.save({
+          ...tablet,
+          groupId: group.id,
+          topic: group.topic,
+          position: index
+        }, tablet.id)));
+        await Promise.all(records.submissions.map((submission) => submissions.update(submission.id, {
+          ...submission,
+          groupId: group.id,
+          topic: group.topic
+        })));
+        imported += records.tablets.length + records.submissions.length;
+      }
+      res.json({ imported });
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  });
+
   app.put('/api/moderation/submissions/:id', requireModeratorAccess, async (req, res, next) => {
     try {
-      res.json({ submission: await submissions.update(req.params.id, req.body || {}) });
+      const previous = await submissions.get(req.params.id);
+      if (!previous) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
+      const group = previous.groupId ? await groups.get(previous.groupId) : null;
+      res.json({ submission: await submissions.update(req.params.id, {
+        ...previous,
+        ...req.body,
+        groupId: previous.groupId,
+        topic: group ? group.topic : previous.topic
+      }) });
     } catch (error) {
       sendKnownError(error, res, next);
     }
@@ -251,8 +498,20 @@ function createApp(options = {}) {
 
   app.post('/api/moderation/submissions/:id/approve', requireModeratorAccess, async (req, res, next) => {
     try {
-      const submission = await submissions.update(req.params.id, req.body || {});
-      const tablet = await repository.save(submission, submission.id);
+      const previous = await submissions.get(req.params.id);
+      if (!previous) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
+      if (!previous.groupId) throw httpError('group_required', 'Import this legacy inscription before approving it.');
+      const group = await groups.get(previous.groupId);
+      if (!group) throw httpError('record_not_found', 'That topic no longer exists.', 404);
+      const approved = await repository.list(group.id);
+      const submission = await submissions.update(req.params.id, {
+        ...previous,
+        ...req.body,
+        groupId: group.id,
+        topic: group.topic
+      });
+      const nextPosition = approved.reduce((highest, tablet) => Math.max(highest, Number(tablet.position) || 0), -1) + 1;
+      const tablet = await repository.save({ ...submission, position: nextPosition }, submission.id);
       await submissions.delete(submission.id);
       res.json({ tablet });
     } catch (error) {
@@ -262,7 +521,15 @@ function createApp(options = {}) {
 
   app.post('/api/moderation/submissions/:id/reject', requireModeratorAccess, async (req, res, next) => {
     try {
-      const submission = await submissions.setStatus(req.params.id, 'rejected', req.body || {});
+      const previous = await submissions.get(req.params.id);
+      if (!previous) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
+      const group = previous.groupId ? await groups.get(previous.groupId) : null;
+      const submission = await submissions.setStatus(req.params.id, 'rejected', {
+        ...previous,
+        ...req.body,
+        groupId: previous.groupId,
+        topic: group ? group.topic : previous.topic
+      });
       res.json({ submission });
     } catch (error) {
       sendKnownError(error, res, next);
@@ -271,7 +538,15 @@ function createApp(options = {}) {
 
   app.post('/api/moderation/submissions/:id/restore', requireModeratorAccess, async (req, res, next) => {
     try {
-      const submission = await submissions.setStatus(req.params.id, 'pending', req.body || {});
+      const previous = await submissions.get(req.params.id);
+      if (!previous) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
+      const group = previous.groupId ? await groups.get(previous.groupId) : null;
+      const submission = await submissions.setStatus(req.params.id, 'pending', {
+        ...previous,
+        ...req.body,
+        groupId: previous.groupId,
+        topic: group ? group.topic : previous.topic
+      });
       res.json({ submission });
     } catch (error) {
       sendKnownError(error, res, next);
@@ -281,19 +556,24 @@ function createApp(options = {}) {
   app.delete('/api/moderation/submissions/:id', requireModeratorAccess, async (req, res, next) => {
     try {
       const deleted = await submissions.delete(req.params.id);
-      if (!deleted) return res.status(404).json({ error: 'record_not_found', message: 'That inscription no longer exists.' });
-      return res.status(204).end();
+      if (!deleted) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
+      res.status(204).end();
     } catch (error) {
-      return sendKnownError(error, res, next);
+      sendKnownError(error, res, next);
     }
   });
 
   app.put('/api/moderation/tablets/:id', requireModeratorAccess, async (req, res, next) => {
     try {
-      if (!await repository.get(req.params.id)) {
-        return res.status(404).json({ error: 'record_not_found', message: 'That inscription no longer exists.' });
-      }
-      res.json({ tablet: await repository.save(req.body || {}, req.params.id) });
+      const previous = await repository.get(req.params.id);
+      if (!previous) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
+      const group = previous.groupId ? await groups.get(previous.groupId) : null;
+      res.json({ tablet: await repository.save({
+        ...previous,
+        ...req.body,
+        groupId: previous.groupId,
+        topic: group ? group.topic : previous.topic
+      }, req.params.id) });
     } catch (error) {
       sendKnownError(error, res, next);
     }
@@ -302,17 +582,22 @@ function createApp(options = {}) {
   app.post('/api/moderation/tablets/:id/unpublish', requireModeratorAccess, async (req, res, next) => {
     try {
       const tablet = await repository.get(req.params.id);
-      if (!tablet) return res.status(404).json({ error: 'record_not_found', message: 'That inscription no longer exists.' });
+      if (!tablet) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
+      const group = tablet.groupId ? await groups.get(tablet.groupId) : null;
       const supplied = req.body && Object.keys(req.body).length ? req.body : tablet;
-      const rejected = await submissions.upsert(supplied, tablet.id, 'rejected');
+      const rejected = await submissions.upsert({
+        ...tablet,
+        ...supplied,
+        groupId: tablet.groupId,
+        topic: group ? group.topic : tablet.topic
+      }, tablet.id, 'rejected');
       await repository.delete(tablet.id);
-      return res.json({ submission: rejected });
+      res.json({ submission: rejected });
     } catch (error) {
-      return sendKnownError(error, res, next);
+      sendKnownError(error, res, next);
     }
   });
 
-  // Backward-compatible authenticated write aliases for any stale editor tab.
   app.post('/api/tablets', requireModeratorAccess, async (req, res, next) => {
     try {
       const id = req.body && req.body.id ? req.body.id : null;
@@ -329,7 +614,7 @@ function createApp(options = {}) {
     }
   });
 
-  app.get(['/submit', '/submit.html'], (req, res) => {
+  app.get(['/submit', '/submit.html', '/submit/:token'], (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.sendFile(path.join(__dirname, 'public', 'submit.html'));
   });
@@ -342,6 +627,17 @@ function createApp(options = {}) {
     res.sendFile(file);
   });
 
+  app.get('/preview/topics/:id', (req, res) => {
+    if (!hasModeratorAccess(req, config)) return res.redirect(302, '/approve');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  });
+
+  app.get(['/topics/:id', '/archive'], (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  });
+
   app.get(['/create', '/create.html'], (req, res) => res.redirect(302, '/submit'));
 
   app.use(express.static(path.join(__dirname, 'public'), {
@@ -352,16 +648,20 @@ function createApp(options = {}) {
 
   app.get('/health', async (req, res, next) => {
     try {
-      const [tablets, pending, rejected] = await Promise.all([
+      const [tablets, pending, rejected, groupRecords, active] = await Promise.all([
         repository.list(),
         submissions.list('pending'),
-        submissions.list('rejected')
+        submissions.list('rejected'),
+        groups.list(),
+        groups.getActive()
       ]);
       res.json({
         status: 'ok',
         tablet_count: tablets.length,
         pending_count: pending.length,
         rejected_count: rejected.length,
+        group_count: groupRecords.length,
+        active_group_configured: Boolean(active),
         moderator_password_configured: Boolean(config.moderatorPassword),
         create_password_configured: Boolean(config.moderatorPassword),
         shared_storage: Boolean(resolveRedisCredentials())
@@ -380,6 +680,7 @@ function createApp(options = {}) {
     return res.status(500).json({ error: 'internal_error', message: 'The archive could not complete that request.' });
   });
 
+  app.locals.groupRepository = groups;
   app.locals.tabletRepository = repository;
   app.locals.submissionRepository = submissions;
   return app;

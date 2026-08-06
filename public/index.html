@@ -3,27 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tablets</title>
+    <title>Riddle Tablets</title>
     <link rel="preload" href="/audio/noita-game-over.mp3?v=2" as="audio" type="audio/mpeg">
     <link rel="preload" href="/audio/noita-ancient-01.mp3?v=1" as="audio" type="audio/mpeg">
     <link rel="preload" href="/audio/noita-ancient-02.mp3?v=1" as="audio" type="audio/mpeg">
     <link rel="preload" href="/audio/noita-tablet-open-orb.mp3?v=1" as="audio" type="audio/mpeg">
-    <link rel="stylesheet" href="/style.css?v=17">
+    <link rel="stylesheet" href="/style.css?v=18">
 </head>
 <body class="archive-page">
     <main class="archive-container">
-        <div id="tablet-grid" class="tablet-grid" aria-live="polite"></div>
-        <section id="completed-section" class="completed-section hidden" aria-labelledby="completed-heading">
-            <h2 id="completed-heading">Solved riddles</h2>
-            <div id="completed-tablet-grid" class="tablet-grid"></div>
+        <section id="waiting-state" class="archive-empty waiting-state hidden" aria-live="polite">
+            <div class="longleg-stage" aria-hidden="true">
+                <span class="longleg-sprite"></span>
+            </div>
+            <h1>The archive waits</h1>
+            <p>No new topic has awakened.</p>
         </section>
-        <section id="archive-empty" class="archive-empty hidden">
+
+        <section id="active-topic" class="topic-section hidden" aria-labelledby="active-topic-heading">
+            <h1 id="active-topic-heading" class="topic-heading"></h1>
+            <div id="tablet-grid" class="tablet-grid" aria-live="polite"></div>
+            <div class="topic-completion-actions">
+                <button id="solve-topic-button" class="solve-topic-button hidden" type="button">Mark topic as solved</button>
+            </div>
+        </section>
+
+        <section id="solved-topic" class="topic-section solved-topic hidden" aria-labelledby="solved-topic-heading">
+            <div class="solved-topic-heading-row">
+                <h2 id="solved-topic-heading" class="topic-heading"></h2>
+                <button id="return-topic-button" class="return-topic-button" type="button">Return to active</button>
+            </div>
+            <div id="solved-tablet-grid" class="tablet-grid"></div>
+        </section>
+
+        <section id="topic-error" class="archive-empty hidden">
             <div class="archive-empty-mark" aria-hidden="true">✦</div>
-            <h1>No tablets have been inscribed</h1>
-            <p>The archive waits in silence.</p>
+            <h1>The tablets could not be summoned</h1>
+            <p>Return when the archive is reachable.</p>
         </section>
+
+        <section id="topic-archive" class="topic-archive hidden" aria-labelledby="topic-archive-heading">
+            <header class="topic-archive-header">
+                <p class="eyebrow">Previously revealed</p>
+                <h1 id="topic-archive-heading">Past topics</h1>
+                <a href="/" class="text-link">Return to the current topic</a>
+            </header>
+            <div id="topic-archive-list" class="topic-archive-list"></div>
+        </section>
+
+        <nav id="archive-link-wrap" class="archive-link-wrap hidden" aria-label="Topic history">
+            <a href="/archive" class="text-link">Past topics</a>
+        </nav>
     </main>
-    <div id="completion-celebration" class="completion-celebration" role="dialog" aria-modal="true" aria-label="Riddle solved" aria-hidden="true">
+
+    <div id="completion-celebration" class="completion-celebration" role="dialog" aria-modal="true" aria-label="Topic solved" aria-hidden="true">
         <button id="completion-close" class="completion-close" type="button" aria-label="Close celebration">&times;</button>
         <span class="completion-pulse" aria-hidden="true"></span>
         <p id="completion-title" class="completion-title" role="status" aria-live="assertive"></p>
@@ -35,6 +68,6 @@
     <audio id="tablet-open-sound" preload="auto" aria-hidden="true">
         <source src="/audio/noita-tablet-open-orb.mp3?v=1" type="audio/mpeg">
     </audio>
-    <script type="module" src="/gallery.js?v=16"></script>
+    <script type="module" src="/gallery.js?v=17"></script>
 </body>
 </html>

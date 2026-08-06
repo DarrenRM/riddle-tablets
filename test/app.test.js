@@ -5,6 +5,7 @@ const http = require('node:http');
 const test = require('node:test');
 const { createApp, RateLimiter } = require('../app');
 const {
+  MemoryGroupRepository,
   MemorySubmissionRepository,
   MemoryTabletRepository,
   resolveRedisCredentials
@@ -47,6 +48,7 @@ async function request(app, method, route, body, extraHeaders = {}) {
 
 function createTestApp(options = {}) {
   return createApp({
+    groupRepository: options.groupRepository || new MemoryGroupRepository(),
     tabletRepository: options.tabletRepository || new MemoryTabletRepository(),
     submissionRepository: options.submissionRepository || new MemorySubmissionRepository(),
     submissionLimiter: options.submissionLimiter || new RateLimiter({ max: 20, windowMs: 60_000 }),
@@ -63,106 +65,166 @@ async function moderatorCookie(app) {
   return login.headers['set-cookie'][0].split(';')[0];
 }
 
-test('public submissions stay private until a moderator approves them', async () => {
+async function createGroup(app, headers, topic = 'The Work') {
+  const created = await request(app, 'POST', '/api/moderation/groups', { topic }, headers);
+  assert.equal(created.status, 201);
+  return created.body.group;
+}
+
+async function submitClue(app, group, author, riddle) {
+  return request(app, 'POST', `/api/submission-groups/${group.submissionToken}/submissions`, {
+    author,
+    riddle,
+    website: ''
+  });
+}
+
+test('groups keep clues private until moderators approve and activate the topic', async () => {
   const app = createTestApp();
-  const landing = await request(app, 'GET', '/');
-  assert.equal(landing.status, 200);
-  assert.doesNotMatch(landing.body, /\/approve/);
+  const initial = await request(app, 'GET', '/api/presentation');
+  assert.equal(initial.status, 200);
+  assert.equal(initial.body.group, null);
+  assert.deepEqual(initial.body.tablets, []);
 
-  const submitPage = await request(app, 'GET', '/submit');
-  assert.equal(submitPage.status, 200);
-  assert.match(submitPage.body, /id="submission-form"/);
-  assert.doesNotMatch(submitPage.body, /saved-tablets/);
-  const oldCreate = await request(app, 'GET', '/create');
-  assert.equal(oldCreate.status, 302);
-  assert.equal(oldCreate.headers.location, '/submit');
-
-  const invalid = await request(app, 'POST', '/api/submissions', { topic: 'Missing fields' });
-  assert.equal(invalid.status, 400);
-  const trapped = await request(app, 'POST', '/api/submissions', {
-    topic: 'Bot', author: 'Bot', riddle: 'Spam', website: 'https://spam.example'
-  });
-  assert.equal(trapped.status, 202);
-
-  const submitted = await request(app, 'POST', '/api/submissions', {
-    topic: 'Hidden clue', author: 'First author', riddle: 'Pending answer', website: ''
-  });
-  assert.equal(submitted.status, 202);
-  assert.equal((await request(app, 'GET', '/api/tablets')).body.tablets.length, 0);
-  assert.equal((await request(app, 'GET', '/api/moderation/queue')).status, 401);
-  const lockedApprove = await request(app, 'GET', '/approve');
-  assert.match(lockedApprove.body, /id="approve-login-form"/);
+  const genericSubmit = await request(app, 'GET', '/submit');
+  assert.equal(genericSubmit.status, 200);
+  assert.doesNotMatch(genericSubmit.body, /name="topic"/);
+  assert.equal((await request(app, 'POST', '/api/submissions', { author: 'No group', riddle: 'No clue' })).status, 400);
 
   const cookie = await moderatorCookie(app);
-  const approvePage = await request(app, 'GET', '/approve', undefined, { Cookie: cookie });
-  assert.match(approvePage.body, /id="moderation-tabs"/);
-  const queue = await request(app, 'GET', '/api/moderation/queue', undefined, { Cookie: cookie });
+  const headers = { Cookie: cookie };
+  const group = await createGroup(app, headers);
+  assert.equal(group.status, 'open');
+  assert.ok(group.submissionToken.length >= 20);
+
+  const context = await request(app, 'GET', `/api/submission-groups/${group.submissionToken}`);
+  assert.equal(context.body.group.topic, 'The Work');
+  assert.equal(context.body.accepting, true);
+  assert.equal((await request(app, 'POST', `/api/submission-groups/${group.submissionToken}/submissions`, {
+    author: 'Bot', riddle: 'Spam', website: 'https://spam.example'
+  })).status, 202);
+
+  const submitted = await submitClue(app, group, 'Public Scribe', 'Look beneath the mountain.');
+  assert.equal(submitted.status, 202);
+  assert.equal((await request(app, 'GET', '/api/presentation')).body.group, null);
+  assert.equal((await request(app, 'GET', `/api/moderation/groups/${group.id}/queue`)).status, 401);
+
+  let queue = await request(app, 'GET', `/api/moderation/groups/${group.id}/queue`, undefined, headers);
   assert.equal(queue.body.pending.length, 1);
-  assert.equal(queue.body.rejected.length, 0);
+  assert.equal(queue.body.pending[0].topic, 'The Work');
   const id = queue.body.pending[0].id;
 
   const approved = await request(app, 'POST', `/api/moderation/submissions/${id}/approve`, {
-    topic: 'Reviewed clue', author: 'Reviewed author', riddle: 'Reviewed answer'
-  }, { Cookie: cookie });
+    author: 'Reviewed Scribe',
+    riddle: 'Look beneath the snowy mountain.'
+  }, headers);
   assert.equal(approved.status, 200);
-  const publicList = await request(app, 'GET', '/api/tablets');
-  assert.equal(publicList.body.tablets.length, 1);
-  assert.equal(publicList.body.tablets[0].topic, 'Reviewed clue');
-  const after = await request(app, 'GET', '/api/moderation/queue', undefined, { Cookie: cookie });
-  assert.equal(after.body.pending.length, 0);
-  assert.equal(after.body.published.length, 1);
+  assert.equal((await request(app, 'GET', '/api/presentation')).body.group, null);
+
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${group.id}/close`, undefined, headers)).body.group.status, 'ready');
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${group.id}/activate`, undefined, headers)).body.group.status, 'active');
+
+  const publicPresentation = await request(app, 'GET', '/api/presentation');
+  assert.equal(publicPresentation.body.group.topic, 'The Work');
+  assert.equal(publicPresentation.body.group.submissionToken, undefined);
+  assert.equal(publicPresentation.body.tablets.length, 1);
+  assert.equal(publicPresentation.body.tablets[0].author, 'Reviewed Scribe');
+  assert.equal(publicPresentation.body.tablets[0].topic, 'The Work');
+
+  queue = await request(app, 'GET', `/api/moderation/groups/${group.id}/queue`, undefined, headers);
+  assert.equal(queue.body.pending.length, 0);
+  assert.equal(queue.body.approved.length, 1);
 });
 
-test('moderators can reject, restore, edit, unpublish, and permanently delete', async () => {
+test('moderators manage group status, clue order, rejection, and unapproval', async () => {
   const app = createTestApp();
   const cookie = await moderatorCookie(app);
   const headers = { Cookie: cookie };
+  const firstGroup = await createGroup(app, headers, 'First Topic');
 
-  const first = await request(app, 'POST', '/api/submissions', {
-    topic: 'Candidate', author: 'Scribe', riddle: 'Draft'
-  });
-  const id = first.body.submission.id;
-  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${id}/reject`, {
-    topic: 'Candidate edited', author: 'Scribe', riddle: 'Rejected draft'
-  }, headers)).status, 200);
-  let queue = await request(app, 'GET', '/api/moderation/queue', undefined, headers);
-  assert.equal(queue.body.rejected[0].topic, 'Candidate edited');
+  const first = await submitClue(app, firstGroup, 'One', 'First clue');
+  const second = await submitClue(app, firstGroup, 'Two', 'Second clue');
+  const firstId = first.body.submission.id;
+  const secondId = second.body.submission.id;
 
-  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${id}/restore`, {
-    topic: 'Restored candidate', author: 'Scribe', riddle: 'Restored draft'
+  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${firstId}/reject`, {
+    author: 'One edited', riddle: 'Rejected clue'
   }, headers)).status, 200);
-  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${id}/approve`, {
-    topic: 'Published candidate', author: 'Scribe', riddle: 'Final draft'
+  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${firstId}/restore`, {
+    author: 'One restored', riddle: 'First clue restored'
   }, headers)).status, 200);
-  assert.equal((await request(app, 'PUT', `/api/moderation/tablets/${id}`, {
-    topic: 'Published edit', author: 'Scribe', riddle: 'Final edit'
+  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${firstId}/approve`, {
+    author: 'One final', riddle: 'First final clue'
   }, headers)).status, 200);
-  assert.equal((await request(app, 'POST', `/api/moderation/tablets/${id}/unpublish`, {
-    topic: 'Published edit', author: 'Scribe', riddle: 'Final edit'
+  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${secondId}/approve`, {
+    author: 'Two final', riddle: 'Second final clue'
   }, headers)).status, 200);
-  assert.equal((await request(app, 'GET', '/api/tablets')).body.tablets.length, 0);
 
-  queue = await request(app, 'GET', '/api/moderation/queue', undefined, headers);
+  let queue = await request(app, 'GET', `/api/moderation/groups/${firstGroup.id}/queue`, undefined, headers);
+  assert.deepEqual(queue.body.approved.map((tablet) => tablet.id), [firstId, secondId]);
+  assert.equal((await request(app, 'PUT', `/api/moderation/groups/${firstGroup.id}/tablet-order`, {
+    ids: [secondId, firstId]
+  }, headers)).status, 200);
+  queue = await request(app, 'GET', `/api/moderation/groups/${firstGroup.id}/queue`, undefined, headers);
+  assert.deepEqual(queue.body.approved.map((tablet) => tablet.id), [secondId, firstId]);
+
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${firstGroup.id}/activate`, undefined, headers)).status, 200);
+  const secondGroup = await createGroup(app, headers, 'Second Topic');
+  const third = await submitClue(app, secondGroup, 'Three', 'Third clue');
+  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${third.body.submission.id}/approve`, {
+    author: 'Three', riddle: 'Third clue'
+  }, headers)).status, 200);
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${secondGroup.id}/activate`, undefined, headers)).status, 200);
+
+  const groups = await request(app, 'GET', '/api/moderation/groups', undefined, headers);
+  assert.equal(groups.body.groups.find((group) => group.id === firstGroup.id).status, 'archived');
+  assert.equal(groups.body.groups.find((group) => group.id === secondGroup.id).status, 'active');
+  const archive = await request(app, 'GET', '/api/topics');
+  assert.ok(archive.body.topics.some((group) => group.id === firstGroup.id && group.status === 'archived'));
+
+  assert.equal((await request(app, 'POST', `/api/moderation/tablets/${secondId}/unpublish`, {
+    author: 'Two final', riddle: 'Second final clue'
+  }, headers)).status, 200);
+  queue = await request(app, 'GET', `/api/moderation/groups/${firstGroup.id}/queue`, undefined, headers);
   assert.equal(queue.body.rejected.length, 1);
-  assert.equal((await request(app, 'DELETE', `/api/moderation/submissions/${id}`, undefined, headers)).status, 204);
-  queue = await request(app, 'GET', '/api/moderation/queue', undefined, headers);
-  assert.equal(queue.body.rejected.length, 0);
+  assert.equal((await request(app, 'DELETE', `/api/moderation/submissions/${secondId}`, undefined, headers)).status, 204);
 });
 
-test('public submission rate limiting returns a retry window', async () => {
+test('closing and rotating a group submission link is enforced by the server', async () => {
+  const app = createTestApp();
+  const cookie = await moderatorCookie(app);
+  const headers = { Cookie: cookie };
+  const group = await createGroup(app, headers, 'Secret Topic');
+
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${group.id}/close`, undefined, headers)).status, 200);
+  const closedContext = await request(app, 'GET', `/api/submission-groups/${group.submissionToken}`);
+  assert.equal(closedContext.body.accepting, false);
+  assert.equal((await submitClue(app, group, 'Late', 'Too late')).status, 409);
+
+  const rotated = await request(app, 'POST', `/api/moderation/groups/${group.id}/rotate-token`, undefined, headers);
+  assert.equal(rotated.status, 200);
+  assert.notEqual(rotated.body.group.submissionToken, group.submissionToken);
+  assert.equal((await request(app, 'GET', `/api/submission-groups/${group.submissionToken}`)).status, 404);
+  assert.equal((await request(app, 'GET', `/api/submission-groups/${rotated.body.group.submissionToken}`)).status, 200);
+});
+
+test('group submission rate limiting returns a retry window', async () => {
   const app = createTestApp({ submissionLimiter: new RateLimiter({ max: 1, windowMs: 60_000 }) });
-  const fields = { topic: 'One', author: 'Scribe', riddle: 'First' };
-  assert.equal((await request(app, 'POST', '/api/submissions', fields)).status, 202);
-  const limited = await request(app, 'POST', '/api/submissions', { ...fields, topic: 'Two' });
+  const cookie = await moderatorCookie(app);
+  const group = await createGroup(app, { Cookie: cookie }, 'Rate Topic');
+  assert.equal((await submitClue(app, group, 'One', 'First')).status, 202);
+  const limited = await submitClue(app, group, 'Two', 'Second');
   assert.equal(limited.status, 429);
   assert.ok(Number(limited.headers['retry-after']) > 0);
 });
 
-test('tablet and submission validation reject incomplete records', async () => {
+test('group, tablet, and submission validation reject incomplete records', async () => {
+  const groups = new MemoryGroupRepository();
   const tablets = new MemoryTabletRepository();
   const submissions = new MemorySubmissionRepository();
-  await assert.rejects(() => tablets.save({ topic: 'Missing fields' }), /all required/i);
-  await assert.rejects(() => submissions.create({ topic: 'Missing fields' }), /all required/i);
+  await assert.rejects(() => groups.create({ topic: '' }), /topic/i);
+  await assert.rejects(() => tablets.save({ author: 'Missing group', riddle: 'Missing topic' }), /required/i);
+  await assert.rejects(() => submissions.create({ groupId: 'valid-group', author: '', riddle: 'Missing author' }), /required/i);
 });
 
 test('shared storage accepts both Upstash and Vercel KV environment names', () => {

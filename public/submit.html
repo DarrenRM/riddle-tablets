@@ -3,29 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Submit your Spoiler Riddle or Clue</title>
-    <link rel="stylesheet" href="/style.css?v=17">
+    <title>Submit a Riddle Clue</title>
+    <link rel="stylesheet" href="/style.css?v=18">
 </head>
 <body class="submit-page">
     <div class="submit-container">
         <header>
-            <p class="eyebrow">Inscribe your own tablet for Crunchpuff</p>
-            <h1>Submit your Spoiler Riddle or Clue</h1>
-            <p class="subtitle">Mods will review and approve</p>
+            <p class="eyebrow">Inscribe a tablet for Crunchpuff</p>
+            <h1>Submit a clue</h1>
+            <p id="submission-topic" class="submission-topic" aria-live="polite">Opening the thread...</p>
+            <p class="subtitle">Moderators will review every inscription before it appears.</p>
         </header>
         <main>
             <div id="submit-toast" class="save-toast" role="status" aria-live="polite"></div>
-            <form id="submission-form" class="inscription-form">
-                <div class="form-field">
-                    <label for="topic-input">Topic</label>
-                    <input id="topic-input" name="topic" type="text" maxlength="120" required autocomplete="off">
-                </div>
+            <section id="submission-unavailable" class="submission-unavailable hidden" aria-live="polite">
+                <span class="tablet-seal" aria-hidden="true">✦</span>
+                <h2 id="submission-unavailable-title">This link is not available</h2>
+                <p id="submission-unavailable-copy">Ask a moderator for the current topic submission link.</p>
+            </section>
+            <form id="submission-form" class="inscription-form hidden">
                 <div class="form-field">
                     <label for="author-input">Author</label>
                     <input id="author-input" name="author" type="text" maxlength="120" required autocomplete="off">
                 </div>
                 <div class="form-field">
-                    <label for="riddle-input">Riddle</label>
+                    <label for="riddle-input">Clue</label>
                     <textarea id="riddle-input" name="riddle" rows="7" maxlength="2000" required></textarea>
                 </div>
                 <div class="submission-honeypot" aria-hidden="true">
@@ -40,6 +42,6 @@
             <p class="submit-home-link"><a href="/" class="text-link">Return to the tablets</a></p>
         </main>
     </div>
-    <script type="module" src="/submit.js?v=1"></script>
+    <script type="module" src="/submit.js?v=2"></script>
 </body>
 </html>

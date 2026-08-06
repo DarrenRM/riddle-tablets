@@ -1,9 +1,25 @@
 const LEGACY_STORAGE_KEY = 'noita-riddle-tablets.v1';
 const REVEAL_STORAGE_KEY = 'riddle-tablet-reveals.v1';
-const COMPLETE_STORAGE_KEY = 'riddle-tablet-completions.v1';
+const LEGACY_COMPLETE_STORAGE_KEY = 'riddle-tablet-completions.v1';
+const SOLVED_GROUP_STORAGE_KEY = 'riddle-topic-groups-solved.v1';
 
 function clean(value, maxLength) {
     return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function loadIds(key) {
+    try {
+        const ids = JSON.parse(localStorage.getItem(key) || '[]');
+        return new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function saveIds(key, ids) {
+    try {
+        localStorage.setItem(key, JSON.stringify([...ids]));
+    } catch {}
 }
 
 export function loadLegacyTablets() {
@@ -26,12 +42,7 @@ export function clearLegacyTablets() {
 }
 
 export function loadRevealedTabletIds() {
-    try {
-        const ids = JSON.parse(localStorage.getItem(REVEAL_STORAGE_KEY) || '[]');
-        return new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : []);
-    } catch {
-        return new Set();
-    }
+    return loadIds(REVEAL_STORAGE_KEY);
 }
 
 export function markTabletRevealed(id) {
@@ -43,16 +54,24 @@ export function setTabletRevealed(id, isRevealed) {
     const ids = loadRevealedTabletIds();
     if (isRevealed) ids.add(id);
     else ids.delete(id);
-    localStorage.setItem(REVEAL_STORAGE_KEY, JSON.stringify([...ids]));
+    saveIds(REVEAL_STORAGE_KEY, ids);
 }
 
+export function loadSolvedGroupIds() {
+    return loadIds(SOLVED_GROUP_STORAGE_KEY);
+}
+
+export function setGroupSolved(id, isSolved) {
+    if (typeof id !== 'string' || !id) return;
+    const ids = loadSolvedGroupIds();
+    if (isSolved) ids.add(id);
+    else ids.delete(id);
+    saveIds(SOLVED_GROUP_STORAGE_KEY, ids);
+}
+
+// Retained only so old browser bundles do not fail while caches expire.
 export function loadCompletedTabletIds() {
-    try {
-        const ids = JSON.parse(localStorage.getItem(COMPLETE_STORAGE_KEY) || '[]');
-        return new Set(Array.isArray(ids) ? ids.filter((id) => typeof id === 'string') : []);
-    } catch {
-        return new Set();
-    }
+    return loadIds(LEGACY_COMPLETE_STORAGE_KEY);
 }
 
 export function setTabletCompleted(id, isCompleted) {
@@ -60,5 +79,5 @@ export function setTabletCompleted(id, isCompleted) {
     const ids = loadCompletedTabletIds();
     if (isCompleted) ids.add(id);
     else ids.delete(id);
-    localStorage.setItem(COMPLETE_STORAGE_KEY, JSON.stringify([...ids]));
+    saveIds(LEGACY_COMPLETE_STORAGE_KEY, ids);
 }

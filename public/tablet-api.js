@@ -9,8 +9,26 @@ async function request(url, options) {
     return result;
 }
 
+export function getActivePresentation() {
+    return request('/api/presentation');
+}
+
+export function getTopicPresentation(id) {
+    return request(`/api/topics/${encodeURIComponent(id)}`);
+}
+
+export function getPreviewPresentation(id) {
+    return request(`/api/moderation/groups/${encodeURIComponent(id)}/presentation`);
+}
+
+export async function listTopics() {
+    const result = await request('/api/topics');
+    return Array.isArray(result.topics) ? result.topics : [];
+}
+
+// Backward-compatible exports for stale modules and local experiments.
 export async function listTablets() {
-    const result = await request('/api/tablets');
+    const result = await getActivePresentation();
     return Array.isArray(result.tablets) ? result.tablets : [];
 }
 

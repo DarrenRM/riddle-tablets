@@ -1,17 +1,31 @@
-import { listTablets } from './tablet-api.js';
 import {
-    loadCompletedTabletIds,
+    getActivePresentation,
+    getPreviewPresentation,
+    getTopicPresentation,
+    listTopics
+} from './tablet-api.js';
+import {
     loadRevealedTabletIds,
-    setTabletCompleted,
+    loadSolvedGroupIds,
+    setGroupSolved,
     setTabletRevealed
 } from './tablet-store.js';
 import { flickerGlyphText, inscribeText } from './tablet-reveal.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    const waiting = document.getElementById('waiting-state');
+    const activeSection = document.getElementById('active-topic');
+    const activeHeading = document.getElementById('active-topic-heading');
     const grid = document.getElementById('tablet-grid');
-    const completedSection = document.getElementById('completed-section');
-    const completedGrid = document.getElementById('completed-tablet-grid');
-    const empty = document.getElementById('archive-empty');
+    const solveButton = document.getElementById('solve-topic-button');
+    const solvedSection = document.getElementById('solved-topic');
+    const solvedHeading = document.getElementById('solved-topic-heading');
+    const solvedGrid = document.getElementById('solved-tablet-grid');
+    const returnButton = document.getElementById('return-topic-button');
+    const errorState = document.getElementById('topic-error');
+    const archiveView = document.getElementById('topic-archive');
+    const archiveList = document.getElementById('topic-archive-list');
+    const archiveLinkWrap = document.getElementById('archive-link-wrap');
     const celebration = document.getElementById('completion-celebration');
     const completionTitle = document.getElementById('completion-title');
     const completionClose = document.getElementById('completion-close');
@@ -19,7 +33,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const ancientSound = document.getElementById('ancient-sound');
     const tabletOpenSound = document.getElementById('tablet-open-sound');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let currentTablets = [];
+    const routeParts = window.location.pathname.split('/').filter(Boolean);
+    const mode = routeParts[0] === 'archive'
+        ? 'archive'
+        : (routeParts[0] === 'preview' ? 'preview' : (routeParts[0] === 'topics' ? 'topic' : 'active'));
+    const routeId = mode === 'preview' ? routeParts[2] : (mode === 'topic' ? routeParts[1] : null);
+
+    let currentPresentation = { group: null, tablets: [] };
+    let currentSignature = '';
     let stopLayouts = () => {};
     let celebrationInProgress = false;
     let activeCelebration = null;
@@ -41,7 +62,6 @@ document.addEventListener('DOMContentLoaded', () => {
             setCompletionWord(to);
             return;
         }
-
         const source = Array.from(from);
         const target = Array.from(to);
         const slots = Math.max(source.length, target.length);
@@ -98,9 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!session || session.dismissed || !celebration.classList.contains('dismissible')) return;
         session.dismissed = true;
         activeCelebration = null;
-        if (session.deathEndedHandler) {
-            completionSound.removeEventListener('ended', session.deathEndedHandler);
-        }
+        if (session.deathEndedHandler) completionSound.removeEventListener('ended', session.deathEndedHandler);
         stopAudio(completionSound);
         stopAudio(ancientSound);
         celebration.classList.remove('visible', 'dismissible');
@@ -108,29 +126,20 @@ document.addEventListener('DOMContentLoaded', () => {
         celebration.setAttribute('aria-hidden', 'true');
         celebration.removeAttribute('data-phase');
         completionTitle.classList.remove('rolling', 'success');
-
-        if (!session.tabletMoved && session.card.isConnected) {
-            session.card.classList.remove('celebrating');
-            session.card.classList.add('changing-section');
-            await delay(reduceMotion ? 0 : 180);
-        }
         celebrationInProgress = false;
-        if (!session.tabletMoved) renderTablets(currentTablets);
     }
 
-    async function celebrateCompletion(tablet, card, prompt) {
-        if (celebrationInProgress) return;
+    async function celebrateCompletion() {
+        const group = currentPresentation.group;
+        if (!group || celebrationInProgress) return;
         celebrationInProgress = true;
         stopAudio(tabletOpenSound);
-        setTabletCompleted(tablet.id, true);
-        prompt.disabled = true;
-        card.classList.add('celebrating');
+        setGroupSolved(group.id, true);
+        renderPresentation();
 
         const session = {
-            card,
             dismissed: false,
             deathEndedHandler: null,
-            tabletMoved: false,
             ancientTrack: ancientTracks[Math.random() < 0.5 ? 0 : 1]
         };
         const showGameOver = Math.random() < 0.2;
@@ -139,8 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
         completionTitle.classList.remove('rolling', 'success');
         celebration.setAttribute('aria-hidden', 'false');
         celebration.classList.add('visible');
-        renderTablets(currentTablets);
-        session.tabletMoved = true;
 
         if (!showGameOver) {
             setCompletionWord('Success');
@@ -178,13 +185,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function installMasonry(targetGrid, cards) {
         let animationFrame = 0;
-
         const columnCount = () => {
             if (window.matchMedia('(max-width: 620px)').matches) return 1;
             if (window.matchMedia('(max-width: 1100px)').matches) return 2;
             return 4;
         };
-
         const layout = () => {
             animationFrame = 0;
             if (!cards.length || targetGrid.classList.contains('hidden')) return;
@@ -192,7 +197,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const gap = parseFloat(getComputedStyle(targetGrid).columnGap) || 19.2;
             const cardWidth = (targetGrid.clientWidth - gap * (columns - 1)) / columns;
             const columnBottoms = Array(columns).fill(0);
-
             cards.forEach((card, index) => {
                 const column = index % columns;
                 card.style.width = `${cardWidth}px`;
@@ -200,17 +204,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.style.top = `${columnBottoms[column]}px`;
                 columnBottoms[column] += card.offsetHeight + gap;
             });
-
             targetGrid.style.height = `${Math.max(0, ...columnBottoms) - gap}px`;
             targetGrid.classList.add('masonry-ready');
         };
-
         const scheduleLayout = () => {
             if (!animationFrame) animationFrame = window.requestAnimationFrame(layout);
         };
-        const observer = typeof ResizeObserver === 'function'
-            ? new ResizeObserver(scheduleLayout)
-            : null;
+        const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleLayout) : null;
         if (observer) {
             observer.observe(targetGrid);
             cards.forEach((card) => observer.observe(card));
@@ -218,7 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('resize', scheduleLayout);
         document.fonts.ready.then(scheduleLayout);
         scheduleLayout();
-
         return () => {
             if (animationFrame) window.cancelAnimationFrame(animationFrame);
             if (observer) observer.disconnect();
@@ -226,9 +225,15 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    function createTablet(tablet, wasRevealed, isCompleted) {
+    function updateSolveVisibility() {
+        const group = currentPresentation.group;
+        const anyRevealed = currentPresentation.tablets.some((tablet) => loadRevealedTabletIds().has(tablet.id));
+        solveButton.classList.toggle('hidden', mode === 'preview' || !group || !anyRevealed || loadSolvedGroupIds().has(group.id));
+    }
+
+    function createTablet(tablet, wasRevealed) {
         const card = document.createElement('article');
-        card.className = `riddle-tablet${wasRevealed ? ' revealed' : ''}${isCompleted ? ' completed' : ''}`;
+        card.className = `riddle-tablet${wasRevealed ? ' revealed' : ''}`;
         card.setAttribute('aria-expanded', String(wasRevealed));
 
         const toggle = document.createElement('button');
@@ -241,19 +246,13 @@ document.addEventListener('DOMContentLoaded', () => {
         seal.textContent = '\u2726';
         seal.setAttribute('aria-hidden', 'true');
 
-        const author = document.createElement('span');
-        author.className = 'tablet-kicker riddle-author';
-        const authorLabel = document.createElement('span');
-        authorLabel.className = 'riddle-author-label';
-        authorLabel.textContent = 'Inscribed by ';
-        const authorName = document.createElement('span');
-        authorName.className = 'riddle-author-name';
-        authorName.textContent = tablet.author;
-        author.append(authorLabel, authorName);
+        const kicker = document.createElement('span');
+        kicker.className = 'tablet-kicker riddle-author';
+        kicker.textContent = 'Inscribed by';
 
-        const topic = document.createElement('span');
-        topic.className = 'riddle-topic';
-        topic.textContent = tablet.topic;
+        const author = document.createElement('span');
+        author.className = 'riddle-topic riddle-author-name';
+        author.textContent = tablet.author;
 
         const reveal = document.createElement('span');
         reveal.className = 'riddle-reveal';
@@ -270,7 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (wasRevealed) riddle.textContent = tablet.riddle;
         revealInner.append(divider, riddle);
         reveal.appendChild(revealInner);
-        toggle.append(seal, author, topic, reveal);
+        toggle.append(seal, kicker, author, reveal);
 
         const prompt = document.createElement('button');
         prompt.type = 'button';
@@ -280,22 +279,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const setExpanded = (expanded) => {
             card.setAttribute('aria-expanded', String(expanded));
             toggle.setAttribute('aria-expanded', String(expanded));
-            toggle.setAttribute('aria-label', `${expanded ? 'Close' : 'Open'} ${tablet.topic}`);
-        };
-        const setRestingPrompt = () => {
-            prompt.disabled = false;
-            prompt.removeAttribute('aria-label');
-            if (isCompleted) {
-                const completedLabel = document.createElement('span');
-                completedLabel.className = 'completed-prompt-label';
-                completedLabel.textContent = 'Completed';
-                const activeLabel = document.createElement('span');
-                activeLabel.className = 'completed-prompt-action';
-                activeLabel.textContent = 'Return to active';
-                prompt.replaceChildren(completedLabel, activeLabel);
-                prompt.setAttribute('aria-label', 'Return completed riddle to active');
-            } else if (card.classList.contains('revealed')) prompt.textContent = 'Mark as complete';
-            else prompt.textContent = 'Reveal tablet';
+            toggle.setAttribute('aria-label', `${expanded ? 'Close' : 'Open'} clue by ${tablet.author}`);
+            prompt.textContent = expanded ? 'Close tablet' : 'Reveal tablet';
         };
 
         const openTablet = () => {
@@ -309,11 +294,13 @@ document.addEventListener('DOMContentLoaded', () => {
             prompt.textContent = 'The tablet awakens...';
             prompt.disabled = true;
             inscribeText(riddle, tablet.riddle, { delay: 260, duration: 1500 });
+            updateSolveVisibility();
             window.setTimeout(() => {
                 if (!card.isConnected) return;
                 card.classList.remove('revealing');
                 card.classList.add('revealed');
-                setRestingPrompt();
+                prompt.disabled = false;
+                setExpanded(true);
             }, reduceMotion ? 0 : 1850);
         };
 
@@ -322,23 +309,10 @@ document.addEventListener('DOMContentLoaded', () => {
             card.classList.remove('revealed');
             setExpanded(false);
             setTabletRevealed(tablet.id, false);
-            setRestingPrompt();
+            updateSolveVisibility();
             window.setTimeout(() => {
-                if (!card.classList.contains('revealed') && !card.classList.contains('revealing')) {
-                    riddle.replaceChildren();
-                }
+                if (!card.classList.contains('revealed') && !card.classList.contains('revealing')) riddle.replaceChildren();
             }, reduceMotion ? 0 : 620);
-        };
-
-        const moveToSection = (completed) => {
-            if (completed) {
-                celebrateCompletion(tablet, card, prompt);
-                return;
-            }
-            setTabletCompleted(tablet.id, completed);
-            prompt.disabled = true;
-            card.classList.add('changing-section');
-            window.setTimeout(() => renderTablets(currentTablets), reduceMotion ? 0 : 180);
         };
 
         card.addEventListener('click', (event) => {
@@ -349,77 +323,141 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         prompt.addEventListener('click', () => {
             if (card.classList.contains('revealing')) return;
-            if (isCompleted) moveToSection(false);
-            else if (card.classList.contains('revealed')) moveToSection(true);
+            if (card.classList.contains('revealed')) closeTablet();
             else openTablet();
         });
 
         setExpanded(wasRevealed);
-        setRestingPrompt();
-
         const flickerEvery = 6000;
-        const flickerOffset = tablet.id.split('').reduce(
-            (total, character) => total + character.charCodeAt(0),
-            0
-        ) % 1200;
-        const flicker = () => {
-            if (!card.classList.contains('revealed') && !card.classList.contains('revealing')) {
-                flickerGlyphText(topic, tablet.topic);
-            }
-        };
+        const flickerOffset = tablet.id.split('').reduce((total, character) => total + character.charCodeAt(0), 0) % 1200;
         if (!reduceMotion) {
             window.setTimeout(() => {
                 if (!card.isConnected) return;
-                flicker();
+                flickerGlyphText(author, tablet.author);
                 const interval = window.setInterval(() => {
                     if (!card.isConnected) window.clearInterval(interval);
-                    else flicker();
+                    else flickerGlyphText(author, tablet.author);
                 }, flickerEvery);
             }, flickerEvery + flickerOffset);
         }
-
         return card;
     }
 
-    function renderTablets(tablets) {
-        stopLayouts();
-        const revealed = loadRevealedTabletIds();
-        const completed = loadCompletedTabletIds();
-        const activeTablets = tablets.filter((tablet) => !completed.has(tablet.id));
-        const completedTablets = tablets.filter((tablet) => completed.has(tablet.id));
-        const activeCards = activeTablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id), false));
-        const completedCards = completedTablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id), true));
-
-        grid.classList.remove('masonry-ready');
-        completedGrid.classList.remove('masonry-ready');
-        grid.style.height = '';
-        completedGrid.style.height = '';
-        grid.replaceChildren(...activeCards);
-        completedGrid.replaceChildren(...completedCards);
-        grid.classList.toggle('hidden', activeCards.length === 0);
-        completedSection.classList.toggle('hidden', completedCards.length === 0);
-        empty.classList.toggle('hidden', tablets.length > 0);
-
-        const cleanups = [];
-        if (activeCards.length) cleanups.push(installMasonry(grid, activeCards));
-        if (completedCards.length) cleanups.push(installMasonry(completedGrid, completedCards));
-        stopLayouts = () => cleanups.forEach((cleanup) => cleanup());
+    function hidePresentationViews() {
+        waiting.classList.add('hidden');
+        activeSection.classList.add('hidden');
+        solvedSection.classList.add('hidden');
+        errorState.classList.add('hidden');
+        archiveView.classList.add('hidden');
+        archiveLinkWrap.classList.add('hidden');
     }
 
-    async function render() {
+    function renderPresentation() {
+        stopLayouts();
+        hidePresentationViews();
+        grid.replaceChildren();
+        solvedGrid.replaceChildren();
+        grid.classList.remove('masonry-ready');
+        solvedGrid.classList.remove('masonry-ready');
+        grid.style.height = '';
+        solvedGrid.style.height = '';
+
+        const { group, tablets } = currentPresentation;
+        if (!group) {
+            waiting.classList.remove('hidden');
+            document.title = 'The archive waits · Riddle Tablets';
+            archiveLinkWrap.classList.remove('hidden');
+            return;
+        }
+
+        document.title = `${group.topic} · Riddle Tablets`;
+        const revealed = loadRevealedTabletIds();
+        const solved = mode !== 'preview' && loadSolvedGroupIds().has(group.id);
+        const cards = tablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id)));
+
+        if (solved) {
+            if (mode === 'active') waiting.classList.remove('hidden');
+            solvedHeading.textContent = `Solved: ${group.topic}`;
+            solvedGrid.replaceChildren(...cards);
+            solvedSection.classList.remove('hidden');
+            if (cards.length) stopLayouts = installMasonry(solvedGrid, cards);
+        } else {
+            activeHeading.textContent = group.topic;
+            grid.replaceChildren(...cards);
+            activeSection.classList.remove('hidden');
+            if (cards.length) stopLayouts = installMasonry(grid, cards);
+            updateSolveVisibility();
+        }
+        if (mode !== 'preview') archiveLinkWrap.classList.remove('hidden');
+    }
+
+    async function renderArchive() {
+        hidePresentationViews();
+        archiveView.classList.remove('hidden');
         try {
-            currentTablets = await listTablets();
-            renderTablets(currentTablets);
+            const topics = (await listTopics()).filter((topic) => topic.status === 'archived');
+            if (!topics.length) {
+                const empty = document.createElement('p');
+                empty.className = 'topic-archive-empty';
+                empty.textContent = 'No topics have been archived yet.';
+                archiveList.replaceChildren(empty);
+                return;
+            }
+            archiveList.replaceChildren(...topics.map((topic) => {
+                const link = document.createElement('a');
+                link.className = 'topic-archive-card';
+                link.href = `/topics/${encodeURIComponent(topic.id)}`;
+                const label = document.createElement('span');
+                label.textContent = 'Solved topic';
+                const title = document.createElement('strong');
+                title.textContent = topic.topic;
+                const count = document.createElement('small');
+                count.textContent = `${topic.tabletCount} clue${topic.tabletCount === 1 ? '' : 's'}`;
+                link.append(label, title, count);
+                return link;
+            }));
         } catch {
-            stopLayouts();
-            grid.replaceChildren();
-            completedGrid.replaceChildren();
-            completedSection.classList.add('hidden');
-            empty.classList.remove('hidden');
-            empty.querySelector('h1').textContent = 'The tablets could not be summoned';
-            empty.querySelector('p').textContent = 'Return when the archive is reachable.';
+            archiveList.textContent = 'The archive could not be reached.';
         }
     }
 
-    render();
+    function signature(presentation) {
+        return JSON.stringify({
+            group: presentation.group && [presentation.group.id, presentation.group.updatedAt],
+            tablets: (presentation.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position])
+        });
+    }
+
+    async function loadPresentation({ quiet = false } = {}) {
+        try {
+            const result = mode === 'preview'
+                ? await getPreviewPresentation(routeId)
+                : (mode === 'topic' ? await getTopicPresentation(routeId) : await getActivePresentation());
+            const nextSignature = signature(result);
+            if (quiet && nextSignature === currentSignature) return;
+            currentSignature = nextSignature;
+            currentPresentation = {
+                group: result.group || null,
+                tablets: Array.isArray(result.tablets) ? result.tablets : []
+            };
+            renderPresentation();
+        } catch {
+            if (quiet) return;
+            hidePresentationViews();
+            errorState.classList.remove('hidden');
+        }
+    }
+
+    solveButton.addEventListener('click', celebrateCompletion);
+    returnButton.addEventListener('click', () => {
+        if (!currentPresentation.group) return;
+        setGroupSolved(currentPresentation.group.id, false);
+        renderPresentation();
+    });
+
+    if (mode === 'archive') renderArchive();
+    else {
+        loadPresentation();
+        if (mode === 'active') window.setInterval(() => loadPresentation({ quiet: true }), 30000);
+    }
 });
