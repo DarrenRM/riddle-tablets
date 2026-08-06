@@ -1099,11 +1099,11 @@ textarea {
 }
 
 .waiting-state h1 {
-    color: var(--green);
+    color: var(--purple);
     font-family: 'NoitaPixel', monospace;
     font-size: clamp(1rem, 3vw, 1.5rem);
     letter-spacing: 0.12em;
-    text-shadow: 0 0 10px rgba(71, 226, 136, 0.24);
+    text-shadow: 0 0 10px rgba(168, 102, 255, 0.24);
     text-transform: uppercase;
 }
 

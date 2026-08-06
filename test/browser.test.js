@@ -52,7 +52,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     );
     assert.match(
       await page.locator('#waiting-state h1').evaluate((element) => getComputedStyle(element).color),
-      /71, 226, 136/
+      /168, 102, 255/
     );
     assert.match(
       await page.locator('.longleg-sprite').evaluate((element) => getComputedStyle(element).backgroundImage),
