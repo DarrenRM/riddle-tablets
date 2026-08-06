@@ -117,6 +117,17 @@ function publicGroup(group) {
   return safe;
 }
 
+function recordsByGroup(records) {
+  const grouped = new Map();
+  records.forEach((record) => {
+    if (!record || !record.groupId) return;
+    const groupRecords = grouped.get(record.groupId) || [];
+    groupRecords.push(record);
+    grouped.set(record.groupId, groupRecords);
+  });
+  return grouped;
+}
+
 function httpError(code, message, status = 400) {
   const error = new Error(message);
   error.code = code;
@@ -182,24 +193,37 @@ function createApp(options = {}) {
     if (error && error.code === 'record_not_found') {
       return res.status(404).json({ error: error.code, message: error.message });
     }
+    if (error && error.code === 'group_conflict') {
+      return res.status(error.status || 409).json({ error: error.code, message: error.message });
+    }
     return next(error);
   };
 
-  const presentationFor = async (group) => ({
+  const presentationFromRecords = (group, tablets) => ({
     group: publicGroup(group),
-    tablets: group ? await repository.list(group.id) : []
+    tablets: group ? tablets : []
+  });
+
+  const presentationFor = async (group) => presentationFromRecords(
+    group,
+    group ? await repository.list(group.id) : []
+  );
+
+  const summarizeGroup = (group, approved, groupSubmissions) => ({
+    ...group,
+    counts: {
+      pending: groupSubmissions.filter((submission) => submission.status === 'pending').length,
+      approved: approved.length,
+      rejected: groupSubmissions.filter((submission) => submission.status === 'rejected').length
+    }
   });
 
   const groupSummary = async (group) => {
-    const [pending, rejected, approved] = await Promise.all([
-      submissions.list('pending', group.id),
-      submissions.list('rejected', group.id),
+    const [groupSubmissions, approved] = await Promise.all([
+      submissions.list(null, group.id),
       repository.list(group.id)
     ]);
-    return {
-      ...group,
-      counts: { pending: pending.length, approved: approved.length, rejected: rejected.length }
-    };
+    return summarizeGroup(group, approved, groupSubmissions);
   };
 
   app.get('/api/presentation', async (req, res, next) => {
@@ -213,8 +237,10 @@ function createApp(options = {}) {
 
   app.get('/api/presentations', async (req, res, next) => {
     try {
-      const visible = (await groups.list()).filter((group) => ['active', 'archived'].includes(group.status));
-      const presentations = await Promise.all(visible.map(presentationFor));
+      const [groupRecords, tabletRecords] = await Promise.all([groups.list(), repository.list()]);
+      const visible = groupRecords.filter((group) => ['active', 'archived'].includes(group.status));
+      const tabletsByGroup = recordsByGroup(tabletRecords);
+      const presentations = visible.map((group) => presentationFromRecords(group, tabletsByGroup.get(group.id) || []));
       res.setHeader('Cache-Control', 'no-store');
       res.json({ presentations });
     } catch (error) {
@@ -224,11 +250,13 @@ function createApp(options = {}) {
 
   app.get('/api/topics', async (req, res, next) => {
     try {
-      const visible = (await groups.list()).filter((group) => ['active', 'archived'].includes(group.status));
-      const topics = await Promise.all(visible.map(async (group) => ({
+      const [groupRecords, tabletRecords] = await Promise.all([groups.list(), repository.list()]);
+      const visible = groupRecords.filter((group) => ['active', 'archived'].includes(group.status));
+      const tabletsByGroup = recordsByGroup(tabletRecords);
+      const topics = visible.map((group) => ({
         ...publicGroup(group),
-        tabletCount: (await repository.list(group.id)).length
-      })));
+        tabletCount: (tabletsByGroup.get(group.id) || []).length
+      }));
       res.setHeader('Cache-Control', 'no-store');
       res.json({ topics });
     } catch (error) {
@@ -342,7 +370,13 @@ function createApp(options = {}) {
         repository.list(),
         submissions.list()
       ]);
-      const summaries = await Promise.all(records.map(groupSummary));
+      const tabletsByGroup = recordsByGroup(allTablets);
+      const submissionsByGroup = recordsByGroup(allSubmissions);
+      const summaries = records.map((group) => summarizeGroup(
+        group,
+        tabletsByGroup.get(group.id) || [],
+        submissionsByGroup.get(group.id) || []
+      ));
       res.setHeader('Cache-Control', 'no-store');
       res.json({
         groups: summaries,

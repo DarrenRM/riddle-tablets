@@ -209,6 +209,11 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.ok(Math.abs((solvedHeadingBox.x + (solvedHeadingBox.width / 2)) - 720) < 1);
     assert.equal(await page.locator('#active-topic').isVisible(), false);
     await page.locator('#completion-celebration.dismissible').waitFor();
+    await page.waitForFunction(
+      () => document.querySelector('#ancient-sound').volume < 0.3,
+      null,
+      { timeout: 12000 }
+    );
     await page.locator('#completion-celebration').waitFor({ state: 'hidden', timeout: 15000 });
     assert.equal(await page.locator('#completion-celebration').getAttribute('aria-hidden'), 'true');
 
@@ -251,6 +256,38 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('.topic-archive-card strong').textContent(), 'The Work');
     await page.locator('.topic-archive-card').click();
     assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+
+    const racePage = await context.newPage();
+    await racePage.addInitScript(() => {
+      const nativeSetInterval = window.setInterval.bind(window);
+      window.setInterval = (callback, delay, ...args) => {
+        if (delay === 30000) return window.setTimeout(callback, 75, ...args);
+        return nativeSetInterval(callback, delay, ...args);
+      };
+    });
+    let presentationCalls = 0;
+    await racePage.route('**/api/presentations', async (route) => {
+      presentationCalls += 1;
+      const call = presentationCalls;
+      if (call === 1) await new Promise((resolve) => setTimeout(resolve, 400));
+      const topic = call === 1 ? 'Stale Topic' : 'Fresh Topic';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          presentations: [{
+            group: { id: call === 1 ? 'stale' : 'fresh', topic, status: 'active', updatedAt: call },
+            tablets: []
+          }]
+        })
+      });
+    });
+    await racePage.goto(origin, { waitUntil: 'domcontentloaded' });
+    await racePage.locator('#active-topic-heading').waitFor({ state: 'visible', timeout: 3000 });
+    assert.equal(await racePage.locator('#active-topic-heading').textContent(), 'Fresh Topic');
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.equal(await racePage.locator('#active-topic-heading').textContent(), 'Fresh Topic');
+    await racePage.close();
 
   } finally {
     if (browser) await browser.close();

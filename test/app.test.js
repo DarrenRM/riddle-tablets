@@ -8,6 +8,7 @@ const {
   MemoryGroupRepository,
   MemorySubmissionRepository,
   MemoryTabletRepository,
+  UpstashGroupRepository,
   resolveRedisCredentials
 } = require('../lib/tablet-repository');
 
@@ -187,12 +188,14 @@ test('moderators manage group status, clue order, rejection, and unapproval', as
     presentations.body.presentations.map((presentation) => presentation.group.topic),
     ['Second Topic', 'First Topic']
   );
+  const publicBeforeCompletion = await request(app, 'GET', `/api/topics/${firstGroup.id}`);
   const completed = await request(app, 'POST', `/api/moderation/groups/${firstGroup.id}/complete`, undefined, headers);
   assert.equal(completed.status, 200);
   assert.ok(completed.body.group.completedAt);
   const publicCompleted = await request(app, 'GET', `/api/topics/${firstGroup.id}`);
   assert.equal(publicCompleted.status, 200);
   assert.equal(publicCompleted.body.group.completedAt, undefined);
+  assert.equal(publicCompleted.body.group.updatedAt, publicBeforeCompletion.body.group.updatedAt);
   const sortedGroups = await request(app, 'GET', '/api/moderation/groups', undefined, headers);
   assert.deepEqual(sortedGroups.body.groups.map((group) => group.topic), ['Second Topic', 'First Topic']);
   const incompleted = await request(app, 'POST', `/api/moderation/groups/${firstGroup.id}/incomplete`, undefined, headers);
@@ -262,4 +265,116 @@ test('shared storage accepts both Upstash and Vercel KV environment names', () =
     KV_REST_API_URL: 'https://kv.example',
     KV_REST_API_TOKEN: 'kv-token'
   }), { url: 'https://kv.example', token: 'kv-token' });
+});
+
+test('collection endpoints batch tablet and submission reads', async () => {
+  class CountingTabletRepository extends MemoryTabletRepository {
+    constructor() {
+      super();
+      this.listCalls = 0;
+    }
+
+    async list(groupId = null) {
+      this.listCalls += 1;
+      return super.list(groupId);
+    }
+  }
+
+  class CountingSubmissionRepository extends MemorySubmissionRepository {
+    constructor() {
+      super();
+      this.listCalls = 0;
+    }
+
+    async list(status = null, groupId = null) {
+      this.listCalls += 1;
+      return super.list(status, groupId);
+    }
+  }
+
+  const groups = new MemoryGroupRepository();
+  const tablets = new CountingTabletRepository();
+  const submissions = new CountingSubmissionRepository();
+  const app = createTestApp({ groupRepository: groups, tabletRepository: tablets, submissionRepository: submissions });
+  const first = await groups.create({ topic: 'First' });
+  const second = await groups.create({ topic: 'Second' });
+  await tablets.save({ groupId: first.id, topic: first.topic, author: 'One', riddle: 'First clue' });
+  await tablets.save({ groupId: second.id, topic: second.topic, author: 'Two', riddle: 'Second clue' });
+  await submissions.create({ groupId: second.id, topic: second.topic, author: 'Pending', riddle: 'Pending clue' });
+  await groups.setStatus(first.id, 'archived');
+  await groups.setStatus(second.id, 'active');
+
+  tablets.listCalls = 0;
+  assert.equal((await request(app, 'GET', '/api/presentations')).status, 200);
+  assert.equal(tablets.listCalls, 1);
+
+  tablets.listCalls = 0;
+  assert.equal((await request(app, 'GET', '/api/topics')).status, 200);
+  assert.equal(tablets.listCalls, 1);
+
+  const headers = { Cookie: await moderatorCookie(app) };
+  tablets.listCalls = 0;
+  submissions.listCalls = 0;
+  assert.equal((await request(app, 'GET', '/api/moderation/groups', undefined, headers)).status, 200);
+  assert.equal(tablets.listCalls, 1);
+  assert.equal(submissions.listCalls, 1);
+});
+
+test('shared group mutations serialize competing activations', async () => {
+  class FakeRedis {
+    constructor(records) {
+      this.hash = new Map(Object.entries(records));
+      this.values = new Map();
+    }
+
+    async hgetall() {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return Object.fromEntries([...this.hash].map(([id, group]) => [id, { ...group }]));
+    }
+
+    async hset(key, writes) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      Object.entries(writes).forEach(([id, group]) => this.hash.set(id, { ...group }));
+      return Object.keys(writes).length;
+    }
+
+    async set(key, value, options = {}) {
+      if (options.nx && this.values.has(key)) return null;
+      this.values.set(key, value);
+      return 'OK';
+    }
+
+    async eval(script, keys, args) {
+      if (this.values.get(keys[0]) !== args[0]) return 0;
+      this.values.delete(keys[0]);
+      return 1;
+    }
+  }
+
+  const now = Date.now();
+  const record = (id, topic, status) => ({
+    id,
+    topic,
+    status,
+    submissionToken: `${id}${'x'.repeat(24)}`,
+    createdAt: now,
+    updatedAt: now,
+    activatedAt: status === 'active' ? now : null,
+    archivedAt: null,
+    completedAt: null
+  });
+  const redis = new FakeRedis({
+    current: record('current', 'Current', 'active'),
+    second: record('second', 'Second', 'open'),
+    third: record('third', 'Third', 'open')
+  });
+  const groups = new UpstashGroupRepository({ key: 'groups', redis });
+
+  await Promise.all([
+    groups.setStatus('second', 'active'),
+    groups.setStatus('third', 'active')
+  ]);
+
+  const records = await groups.list();
+  assert.equal(records.filter((group) => group.status === 'active').length, 1);
 });

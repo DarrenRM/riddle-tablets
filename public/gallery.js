@@ -45,6 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeCelebration = null;
     let longlegIdleTimer = 0;
     let longlegHeartTimer = 0;
+    let presentationLoadVersion = 0;
+    let activeRefreshInFlight = false;
 
     const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
     const scrambleCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -53,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         '/audio/noita-ancient-02.mp3?v=1'
     ];
     const CELEBRATION_HOLD_MS = 10000;
+    const CELEBRATION_FADE_MS = 1200;
     const SCRAMBLE_START_DELAY_MS = 2200;
     const SCRAMBLE_ROLLS = 12;
     const SCRAMBLE_STEP_MS = 58;
@@ -137,9 +140,26 @@ document.addEventListener('DOMContentLoaded', () => {
         ancientSound.play().catch(() => {});
     }
 
+    function fadeAncientTrack(session) {
+        if (activeCelebration !== session || session.dismissed) return;
+        const startingVolume = ancientSound.volume;
+        const startedAt = performance.now();
+        const fade = (now) => {
+            if (activeCelebration !== session || session.dismissed) return;
+            const progress = Math.min(1, (now - startedAt) / CELEBRATION_FADE_MS);
+            ancientSound.volume = startingVolume * (1 - progress);
+            if (progress < 1) session.audioFadeFrame = window.requestAnimationFrame(fade);
+        };
+        session.audioFadeFrame = window.requestAnimationFrame(fade);
+    }
+
     function makeCelebrationDismissible(session) {
         if (activeCelebration !== session || session.dismissed) return;
         celebration.classList.add('dismissible');
+        session.audioFadeTimer = window.setTimeout(
+            () => fadeAncientTrack(session),
+            CELEBRATION_HOLD_MS - CELEBRATION_FADE_MS
+        );
         session.autoDismissTimer = window.setTimeout(() => dismissCelebration(), CELEBRATION_HOLD_MS);
     }
 
@@ -149,6 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
         session.dismissed = true;
         activeCelebration = null;
         if (session.autoDismissTimer) window.clearTimeout(session.autoDismissTimer);
+        if (session.audioFadeTimer) window.clearTimeout(session.audioFadeTimer);
+        if (session.audioFadeFrame) window.cancelAnimationFrame(session.audioFadeFrame);
         if (session.deathEndedHandler) completionSound.removeEventListener('ended', session.deathEndedHandler);
         stopAudio(completionSound);
         stopAudio(ancientSound);
@@ -172,6 +194,8 @@ document.addEventListener('DOMContentLoaded', () => {
             dismissed: false,
             deathEndedHandler: null,
             autoDismissTimer: 0,
+            audioFadeTimer: 0,
+            audioFadeFrame: 0,
             ancientTrack: ancientTracks[Math.random() < 0.5 ? 0 : 1]
         };
         const showGameOver = Math.random() < 0.2;
@@ -479,11 +503,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function signature(presentation) {
+    function signature(presentation, presentations = availablePresentations) {
         return JSON.stringify({
             group: presentation.group && [presentation.group.id, presentation.group.updatedAt],
             tablets: (presentation.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position]),
-            available: availablePresentations.map((item) => ({
+            available: presentations.map((item) => ({
                 group: item.group && [item.group.id, item.group.updatedAt],
                 tablets: (item.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position])
             }))
@@ -491,20 +515,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function loadPresentation({ quiet = false } = {}) {
+        const loadVersion = ++presentationLoadVersion;
         try {
             let result;
+            let nextAvailablePresentations = [];
             if (mode === 'active') {
-                availablePresentations = await listPresentations();
-                result = availablePresentations.find((presentation) => presentation.group && presentation.group.status === 'active')
+                nextAvailablePresentations = await listPresentations();
+                result = nextAvailablePresentations.find((presentation) => presentation.group && presentation.group.status === 'active')
                     || { group: null, tablets: [] };
             } else {
-                availablePresentations = [];
                 result = mode === 'preview'
                     ? await getPreviewPresentation(routeId)
                     : await getTopicPresentation(routeId);
             }
-            const nextSignature = signature(result);
+            if (loadVersion !== presentationLoadVersion) return;
+            const nextSignature = signature(result, nextAvailablePresentations);
             if (quiet && nextSignature === currentSignature) return;
+            availablePresentations = nextAvailablePresentations;
             currentSignature = nextSignature;
             currentPresentation = {
                 group: result.group || null,
@@ -512,6 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             renderPresentation();
         } catch {
+            if (loadVersion !== presentationLoadVersion) return;
             if (quiet) return;
             hidePresentationViews();
             errorState.classList.remove('hidden');
@@ -519,13 +547,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function refreshIfActiveChanged() {
-        if (waiting.classList.contains('hidden')) return;
+        if (waiting.classList.contains('hidden') || activeRefreshInFlight) return;
+        activeRefreshInFlight = true;
         try {
             const result = await getActivePresentation();
             const nextId = result.group ? result.group.id : null;
             const currentId = currentPresentation.group ? currentPresentation.group.id : null;
             if (nextId !== currentId) await loadPresentation({ quiet: true });
         } catch {}
+        finally {
+            activeRefreshInFlight = false;
+        }
     }
 
     solveButton.addEventListener('click', celebrateCompletion);
