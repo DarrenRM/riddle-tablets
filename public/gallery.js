@@ -2,6 +2,7 @@ import {
     getActivePresentation,
     getPreviewPresentation,
     getTopicPresentation,
+    listPresentations,
     listTopics
 } from './tablet-api.js';
 import {
@@ -14,18 +15,15 @@ import { flickerGlyphText, inscribeText } from './tablet-reveal.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const waiting = document.getElementById('waiting-state');
+    const longleg = document.querySelector('.longleg-sprite');
     const activeSection = document.getElementById('active-topic');
     const activeHeading = document.getElementById('active-topic-heading');
     const grid = document.getElementById('tablet-grid');
     const solveButton = document.getElementById('solve-topic-button');
-    const solvedSection = document.getElementById('solved-topic');
-    const solvedHeading = document.getElementById('solved-topic-heading');
-    const solvedGrid = document.getElementById('solved-tablet-grid');
-    const returnButton = document.getElementById('return-topic-button');
+    const solvedTopics = document.getElementById('solved-topics');
     const errorState = document.getElementById('topic-error');
     const archiveView = document.getElementById('topic-archive');
     const archiveList = document.getElementById('topic-archive-list');
-    const archiveLinkWrap = document.getElementById('archive-link-wrap');
     const celebration = document.getElementById('completion-celebration');
     const completionTitle = document.getElementById('completion-title');
     const completionClose = document.getElementById('completion-close');
@@ -40,10 +38,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const routeId = mode === 'preview' ? routeParts[2] : (mode === 'topic' ? routeParts[1] : null);
 
     let currentPresentation = { group: null, tablets: [] };
+    let availablePresentations = [];
     let currentSignature = '';
     let stopLayouts = () => {};
     let celebrationInProgress = false;
     let activeCelebration = null;
+    let longlegIdleTimer = 0;
+    let longlegHeartTimer = 0;
 
     const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
     const scrambleCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -51,6 +52,34 @@ document.addEventListener('DOMContentLoaded', () => {
         '/audio/noita-ancient-01.mp3?v=1',
         '/audio/noita-ancient-02.mp3?v=1'
     ];
+    const CELEBRATION_HOLD_MS = 10000;
+    const SCRAMBLE_START_DELAY_MS = 2200;
+    const SCRAMBLE_ROLLS = 12;
+    const SCRAMBLE_STEP_MS = 58;
+    const SCRAMBLE_STAGGER_MS = 80;
+
+    function stopLonglegCycle() {
+        window.clearTimeout(longlegIdleTimer);
+        window.clearTimeout(longlegHeartTimer);
+        longlegIdleTimer = 0;
+        longlegHeartTimer = 0;
+        longleg.classList.remove('hearting');
+    }
+
+    function startLonglegCycle() {
+        stopLonglegCycle();
+        if (reduceMotion) return;
+        const scheduleHearts = () => {
+            longlegIdleTimer = window.setTimeout(() => {
+                longleg.classList.add('hearting');
+                longlegHeartTimer = window.setTimeout(() => {
+                    longleg.classList.remove('hearting');
+                    if (!waiting.classList.contains('hidden')) scheduleHearts();
+                }, 3000);
+            }, 7000);
+        };
+        scheduleHearts();
+    }
 
     function setCompletionWord(word) {
         completionTitle.textContent = word;
@@ -79,12 +108,12 @@ document.addEventListener('DOMContentLoaded', () => {
         completionTitle.classList.add('rolling');
 
         await Promise.all(letters.map(async (letter, index) => {
-            await delay(index * 48);
-            for (let roll = 0; roll < 7; roll += 1) {
+            await delay(index * SCRAMBLE_STAGGER_MS);
+            for (let roll = 0; roll < SCRAMBLE_ROLLS; roll += 1) {
                 if (roll > 0 || letter.textContent.trim()) {
                     letter.textContent = scrambleCharacters[Math.floor(Math.random() * scrambleCharacters.length)];
                 }
-                await delay(44);
+                await delay(SCRAMBLE_STEP_MS);
             }
             const character = target[index - targetOffset];
             letter.textContent = character || '\u00a0';
@@ -111,6 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function makeCelebrationDismissible(session) {
         if (activeCelebration !== session || session.dismissed) return;
         celebration.classList.add('dismissible');
+        session.autoDismissTimer = window.setTimeout(() => dismissCelebration(), CELEBRATION_HOLD_MS);
     }
 
     async function dismissCelebration() {
@@ -118,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!session || session.dismissed || !celebration.classList.contains('dismissible')) return;
         session.dismissed = true;
         activeCelebration = null;
+        if (session.autoDismissTimer) window.clearTimeout(session.autoDismissTimer);
         if (session.deathEndedHandler) completionSound.removeEventListener('ended', session.deathEndedHandler);
         stopAudio(completionSound);
         stopAudio(ancientSound);
@@ -140,6 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const session = {
             dismissed: false,
             deathEndedHandler: null,
+            autoDismissTimer: 0,
             ancientTrack: ancientTracks[Math.random() < 0.5 ? 0 : 1]
         };
         const showGameOver = Math.random() < 0.2;
@@ -167,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
         completionSound.volume = 0.72;
         completionSound.play().catch(() => playAncientTrack(session));
 
-        await delay(reduceMotion ? 350 : 1500);
+        await delay(reduceMotion ? 350 : SCRAMBLE_START_DELAY_MS);
         if (activeCelebration !== session || session.dismissed) return;
         celebration.dataset.phase = 'scrambling';
         await morphCompletionWord('Game Over', '(not really)');
@@ -344,51 +376,77 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function hidePresentationViews() {
+        stopLonglegCycle();
         waiting.classList.add('hidden');
         activeSection.classList.add('hidden');
-        solvedSection.classList.add('hidden');
+        solvedTopics.classList.add('hidden');
         errorState.classList.add('hidden');
         archiveView.classList.add('hidden');
-        archiveLinkWrap.classList.add('hidden');
+    }
+
+    function createSolvedSection(presentation, revealed) {
+        const section = document.createElement('section');
+        section.className = 'topic-section solved-topic';
+        section.setAttribute('aria-labelledby', `solved-topic-heading-${presentation.group.id}`);
+
+        const heading = document.createElement('h2');
+        heading.id = `solved-topic-heading-${presentation.group.id}`;
+        heading.className = 'topic-heading';
+        heading.textContent = `Solved: ${presentation.group.topic}`;
+
+        const solvedGrid = document.createElement('div');
+        solvedGrid.className = 'tablet-grid';
+        const cards = presentation.tablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id)));
+        solvedGrid.replaceChildren(...cards);
+        section.append(heading, solvedGrid);
+        return { section, solvedGrid, cards };
     }
 
     function renderPresentation() {
         stopLayouts();
         hidePresentationViews();
         grid.replaceChildren();
-        solvedGrid.replaceChildren();
+        solvedTopics.replaceChildren();
         grid.classList.remove('masonry-ready');
-        solvedGrid.classList.remove('masonry-ready');
         grid.style.height = '';
-        solvedGrid.style.height = '';
 
         const { group, tablets } = currentPresentation;
-        if (!group) {
+        const revealed = loadRevealedTabletIds();
+        const solvedIds = loadSolvedGroupIds();
+        const currentSolved = Boolean(group && mode !== 'preview' && solvedIds.has(group.id));
+        const layouts = [];
+
+        if (!group || (mode === 'active' && currentSolved)) {
             waiting.classList.remove('hidden');
             document.title = 'Hamis Waits · Riddle Tablets';
-            archiveLinkWrap.classList.remove('hidden');
-            return;
-        }
-
-        document.title = `${group.topic} · Riddle Tablets`;
-        const revealed = loadRevealedTabletIds();
-        const solved = mode !== 'preview' && loadSolvedGroupIds().has(group.id);
-        const cards = tablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id)));
-
-        if (solved) {
-            if (mode === 'active') waiting.classList.remove('hidden');
-            solvedHeading.textContent = `Solved: ${group.topic}`;
-            solvedGrid.replaceChildren(...cards);
-            solvedSection.classList.remove('hidden');
-            if (cards.length) stopLayouts = installMasonry(solvedGrid, cards);
-        } else {
+        } else if (currentSolved) {
+            document.title = `${group.topic} · Riddle Tablets`;
+        } else if (!currentSolved) {
+            document.title = `${group.topic} · Riddle Tablets`;
+            const cards = tablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id)));
             activeHeading.textContent = group.topic;
             grid.replaceChildren(...cards);
             activeSection.classList.remove('hidden');
-            if (cards.length) stopLayouts = installMasonry(grid, cards);
+            if (cards.length) layouts.push(installMasonry(grid, cards));
             updateSolveVisibility();
         }
-        if (mode !== 'preview') archiveLinkWrap.classList.remove('hidden');
+
+        if (mode !== 'preview') {
+            const byId = new Map(availablePresentations
+                .filter((presentation) => presentation.group)
+                .map((presentation) => [presentation.group.id, presentation]));
+            if (group) byId.set(group.id, currentPresentation);
+            const solved = [...byId.values()].filter((presentation) => solvedIds.has(presentation.group.id));
+            const rendered = solved.map((presentation) => createSolvedSection(presentation, revealed));
+            solvedTopics.replaceChildren(...rendered.map(({ section }) => section));
+            solvedTopics.classList.toggle('hidden', rendered.length === 0);
+            rendered.forEach(({ solvedGrid, cards }) => {
+                if (cards.length) layouts.push(installMasonry(solvedGrid, cards));
+            });
+        }
+
+        stopLayouts = () => layouts.forEach((stop) => stop());
+        if (!waiting.classList.contains('hidden')) startLonglegCycle();
     }
 
     async function renderArchive() {
@@ -424,15 +482,27 @@ document.addEventListener('DOMContentLoaded', () => {
     function signature(presentation) {
         return JSON.stringify({
             group: presentation.group && [presentation.group.id, presentation.group.updatedAt],
-            tablets: (presentation.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position])
+            tablets: (presentation.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position]),
+            available: availablePresentations.map((item) => ({
+                group: item.group && [item.group.id, item.group.updatedAt],
+                tablets: (item.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position])
+            }))
         });
     }
 
     async function loadPresentation({ quiet = false } = {}) {
         try {
-            const result = mode === 'preview'
-                ? await getPreviewPresentation(routeId)
-                : (mode === 'topic' ? await getTopicPresentation(routeId) : await getActivePresentation());
+            let result;
+            if (mode === 'active') {
+                availablePresentations = await listPresentations();
+                result = availablePresentations.find((presentation) => presentation.group && presentation.group.status === 'active')
+                    || { group: null, tablets: [] };
+            } else {
+                availablePresentations = [];
+                result = mode === 'preview'
+                    ? await getPreviewPresentation(routeId)
+                    : await getTopicPresentation(routeId);
+            }
             const nextSignature = signature(result);
             if (quiet && nextSignature === currentSignature) return;
             currentSignature = nextSignature;
@@ -448,16 +518,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function refreshIfActiveChanged() {
+        if (waiting.classList.contains('hidden')) return;
+        try {
+            const result = await getActivePresentation();
+            const nextId = result.group ? result.group.id : null;
+            const currentId = currentPresentation.group ? currentPresentation.group.id : null;
+            if (nextId !== currentId) await loadPresentation({ quiet: true });
+        } catch {}
+    }
+
     solveButton.addEventListener('click', celebrateCompletion);
-    returnButton.addEventListener('click', () => {
-        if (!currentPresentation.group) return;
-        setGroupSolved(currentPresentation.group.id, false);
-        renderPresentation();
-    });
 
     if (mode === 'archive') renderArchive();
     else {
         loadPresentation();
-        if (mode === 'active') window.setInterval(() => loadPresentation({ quiet: true }), 30000);
+        if (mode === 'active') {
+            window.setInterval(refreshIfActiveChanged, 3000);
+            window.setInterval(() => loadPresentation({ quiet: true }), 30000);
+        }
     }
 });

@@ -2,12 +2,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const form = document.getElementById('submission-form');
     const button = document.getElementById('submit-tablet-btn');
     const status = document.getElementById('form-status');
-    const toast = document.getElementById('submit-toast');
     const topic = document.getElementById('submission-topic');
     const unavailable = document.getElementById('submission-unavailable');
+    const success = document.getElementById('submission-success');
     const unavailableTitle = document.getElementById('submission-unavailable-title');
     const unavailableCopy = document.getElementById('submission-unavailable-copy');
-    let toastTimer = 0;
 
     const parts = window.location.pathname.split('/').filter(Boolean);
     const token = parts[0] === 'submit' && parts.length === 2 ? parts[1] : '';
@@ -21,10 +20,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     function showSuccess() {
-        window.clearTimeout(toastTimer);
-        toast.textContent = 'Submitted for review.';
-        toast.classList.add('visible');
-        toastTimer = window.setTimeout(() => toast.classList.remove('visible'), 3000);
+        form.classList.add('hidden');
+        status.textContent = '';
+        success.classList.remove('hidden');
     }
 
     if (!token) {
@@ -67,10 +65,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
             const result = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(result.message || 'The inscription could not be submitted.');
-            form.reset();
-            status.textContent = '';
             showSuccess();
-            document.getElementById('author-input').focus();
         } catch (error) {
             status.textContent = error.message;
         } finally {

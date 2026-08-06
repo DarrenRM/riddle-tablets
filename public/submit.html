@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Submit a Riddle Clue</title>
-    <link rel="stylesheet" href="/style.css?v=19">
+    <link rel="stylesheet" href="/style.css?v=20">
 </head>
 <body class="submit-page">
     <div class="submit-container">
@@ -15,11 +15,16 @@
             <p class="subtitle">Moderators will review every inscription before it appears.</p>
         </header>
         <main>
-            <div id="submit-toast" class="save-toast" role="status" aria-live="polite"></div>
             <section id="submission-unavailable" class="submission-unavailable hidden" aria-live="polite">
                 <span class="tablet-seal" aria-hidden="true">✦</span>
                 <h2 id="submission-unavailable-title">This link is not available</h2>
                 <p id="submission-unavailable-copy">Ask a moderator for the current topic submission link.</p>
+            </section>
+            <section id="submission-success" class="submission-success hidden" aria-live="polite">
+                <p class="submission-success-mark" aria-hidden="true">✦</p>
+                <h2>Thank you.</h2>
+                <p>Your clue has been sent to the moderators for review.</p>
+                <p>This page is complete; you can close it now.</p>
             </section>
             <form id="submission-form" class="inscription-form hidden">
                 <div class="form-field">
@@ -42,6 +47,6 @@
             <p class="submit-home-link"><a href="/" class="text-link">Return to the tablets</a></p>
         </main>
     </div>
-    <script type="module" src="/submit.js?v=2"></script>
+    <script type="module" src="/submit.js?v=3"></script>
 </body>
 </html>

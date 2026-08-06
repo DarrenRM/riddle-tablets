@@ -13,6 +13,11 @@ export function getActivePresentation() {
     return request('/api/presentation');
 }
 
+export async function listPresentations() {
+    const result = await request('/api/presentations');
+    return Array.isArray(result.presentations) ? result.presentations : [];
+}
+
 export function getTopicPresentation(id) {
     return request(`/api/topics/${encodeURIComponent(id)}`);
 }

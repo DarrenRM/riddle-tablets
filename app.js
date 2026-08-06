@@ -113,7 +113,7 @@ function createDefaultSubmissionLimiter(config) {
 
 function publicGroup(group) {
   if (!group) return null;
-  const { submissionToken, ...safe } = group;
+  const { submissionToken, completedAt, ...safe } = group;
   return safe;
 }
 
@@ -206,6 +206,17 @@ function createApp(options = {}) {
     try {
       res.setHeader('Cache-Control', 'no-store');
       res.json(await presentationFor(await groups.getActive()));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get('/api/presentations', async (req, res, next) => {
+    try {
+      const visible = (await groups.list()).filter((group) => ['active', 'archived'].includes(group.status));
+      const presentations = await Promise.all(visible.map(presentationFor));
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ presentations });
     } catch (error) {
       next(error);
     }
@@ -389,6 +400,37 @@ function createApp(options = {}) {
   app.post('/api/moderation/groups/:id/close', requireModeratorAccess, setGroupStatus('ready'));
   app.post('/api/moderation/groups/:id/activate', requireModeratorAccess, setGroupStatus('active'));
   app.post('/api/moderation/groups/:id/archive', requireModeratorAccess, setGroupStatus('archived'));
+
+  const setGroupCompletion = (completed) => async (req, res, next) => {
+    try {
+      const group = await groups.setCompleted(req.params.id, completed);
+      res.json({ group: await groupSummary(group) });
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  };
+
+  app.post('/api/moderation/groups/:id/complete', requireModeratorAccess, setGroupCompletion(true));
+  app.post('/api/moderation/groups/:id/incomplete', requireModeratorAccess, setGroupCompletion(false));
+
+  app.delete('/api/moderation/groups/:id', requireModeratorAccess, async (req, res, next) => {
+    try {
+      const group = await groups.get(req.params.id);
+      if (!group) throw httpError('record_not_found', 'That topic no longer exists.', 404);
+      const [tablets, groupSubmissions] = await Promise.all([
+        repository.list(group.id),
+        submissions.list(null, group.id)
+      ]);
+      await Promise.all([
+        ...tablets.map((tablet) => repository.delete(tablet.id)),
+        ...groupSubmissions.map((submission) => submissions.delete(submission.id))
+      ]);
+      await groups.delete(group.id);
+      res.status(204).end();
+    } catch (error) {
+      sendKnownError(error, res, next);
+    }
+  });
 
   app.post('/api/moderation/groups/:id/rotate-token', requireModeratorAccess, async (req, res, next) => {
     try {

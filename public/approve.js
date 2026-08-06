@@ -4,13 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const workspace = document.getElementById('group-workspace');
     const workspaceEmpty = document.getElementById('group-empty');
     const topicInput = document.getElementById('group-topic-input');
-    const statusBadge = document.getElementById('group-status-badge');
     const submissionLink = document.getElementById('group-submission-link');
-    const openFormLink = document.getElementById('open-group-form');
-    const previewLink = document.getElementById('preview-group');
     const toggleSubmissions = document.getElementById('toggle-group-submissions');
     const activateButton = document.getElementById('activate-group');
-    const archiveButton = document.getElementById('archive-group');
+    const toggleCompletion = document.getElementById('toggle-group-completion');
     const tabs = document.getElementById('moderation-tabs');
     const list = document.getElementById('moderation-list');
     const status = document.getElementById('moderation-status');
@@ -24,7 +21,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const newTopic = document.getElementById('new-group-topic');
     const createdTopic = document.getElementById('created-group-topic');
     const createdLink = document.getElementById('created-group-link');
-    const openCreatedForm = document.getElementById('open-created-group-form');
 
     let groups = [];
     let selectedGroupId = null;
@@ -76,10 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return groups.find((group) => group.id === selectedGroupId) || null;
     }
 
-    function statusLabel(value) {
-        return value.charAt(0).toUpperCase() + value.slice(1);
-    }
-
     function renderGroupList() {
         groupList.replaceChildren(...groups.map((group) => {
             const button = document.createElement('button');
@@ -92,10 +84,19 @@ document.addEventListener('DOMContentLoaded', () => {
             header.className = 'group-list-item-header';
             const topic = document.createElement('strong');
             topic.textContent = group.topic;
-            const badge = document.createElement('span');
-            badge.className = `group-mini-status status-${group.status}`;
-            badge.textContent = statusLabel(group.status);
-            header.append(topic, badge);
+            header.append(topic);
+            if (group.status === 'active') {
+                const badge = document.createElement('span');
+                badge.className = 'group-mini-status status-active';
+                badge.textContent = 'Active';
+                header.append(badge);
+            }
+            if (group.completedAt) {
+                const badge = document.createElement('span');
+                badge.className = 'group-mini-status status-done';
+                badge.textContent = 'Done';
+                header.append(badge);
+            }
 
             const counts = document.createElement('span');
             counts.className = 'group-list-counts';
@@ -116,18 +117,14 @@ document.addEventListener('DOMContentLoaded', () => {
         workspace.classList.remove('hidden');
         workspaceEmpty.classList.add('hidden');
         topicInput.value = group.topic;
-        statusBadge.textContent = statusLabel(group.status);
-        statusBadge.className = `group-status-badge status-${group.status}`;
 
         const url = submissionUrl(group);
         submissionLink.value = url;
-        openFormLink.href = url;
-        previewLink.href = `/preview/topics/${encodeURIComponent(group.id)}`;
         toggleSubmissions.textContent = group.status === 'open' ? 'Close submissions' : 'Reopen submissions';
         toggleSubmissions.disabled = group.status === 'active';
         activateButton.disabled = group.status === 'active' || group.counts.approved === 0;
         activateButton.textContent = group.status === 'active' ? 'Currently active' : 'Make active';
-        archiveButton.disabled = group.status === 'archived';
+        toggleCompletion.textContent = group.completedAt ? 'Mark incomplete' : 'Mark complete';
     }
 
     function fieldsFrom(row) {
@@ -273,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadGroups() {
         const result = await request('/api/moderation/groups');
-        groups = result.groups;
+        groups = result.groups.sort((left, right) => Boolean(left.completedAt) - Boolean(right.completedAt));
         const legacyCount = result.legacy.tablets + result.legacy.submissions;
         legacyBanner.classList.toggle('hidden', legacyCount === 0);
         legacySummary.textContent = legacyCount
@@ -339,7 +336,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const url = submissionUrl(result.group);
             createdTopic.textContent = result.group.topic;
             createdLink.value = url;
-            openCreatedForm.href = url;
             createForm.classList.add('hidden');
             createSuccess.classList.remove('hidden');
             await refreshAll();
@@ -373,19 +369,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     activateButton.addEventListener('click', () => changeStatus(
         'activate',
-        'Make this the active topic? The currently active topic will be archived.',
+        'Make this the active topic? The current active topic will no longer be active.',
         'Topic is now active.'
     ));
-    archiveButton.addEventListener('click', () => changeStatus('archive', 'Archive this topic?', 'Topic archived.'));
-    document.getElementById('reset-group-link').addEventListener('click', async () => {
-        if (!window.confirm('Reset this submission link? The previous link will stop working.')) return;
-        try {
-            await request(`/api/moderation/groups/${selectedGroupId}/rotate-token`, { method: 'POST' });
-            showToast('Submission link reset.');
-            await refreshAll();
-        } catch (error) {
-            status.textContent = error.message;
-        }
+    toggleCompletion.addEventListener('click', () => {
+        const group = selectedGroup();
+        if (!group) return;
+        const completed = !group.completedAt;
+        changeStatus(completed ? 'complete' : 'incomplete', null, completed ? 'Topic marked complete.' : 'Topic marked incomplete.');
     });
 
     document.getElementById('import-legacy-button').addEventListener('click', async () => {

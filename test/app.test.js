@@ -181,6 +181,23 @@ test('moderators manage group status, clue order, rejection, and unapproval', as
   assert.equal(groups.body.groups.find((group) => group.id === secondGroup.id).status, 'active');
   const archive = await request(app, 'GET', '/api/topics');
   assert.ok(archive.body.topics.some((group) => group.id === firstGroup.id && group.status === 'archived'));
+  const presentations = await request(app, 'GET', '/api/presentations');
+  assert.equal(presentations.status, 200);
+  assert.deepEqual(
+    presentations.body.presentations.map((presentation) => presentation.group.topic),
+    ['Second Topic', 'First Topic']
+  );
+  const completed = await request(app, 'POST', `/api/moderation/groups/${firstGroup.id}/complete`, undefined, headers);
+  assert.equal(completed.status, 200);
+  assert.ok(completed.body.group.completedAt);
+  const publicCompleted = await request(app, 'GET', `/api/topics/${firstGroup.id}`);
+  assert.equal(publicCompleted.status, 200);
+  assert.equal(publicCompleted.body.group.completedAt, undefined);
+  const sortedGroups = await request(app, 'GET', '/api/moderation/groups', undefined, headers);
+  assert.deepEqual(sortedGroups.body.groups.map((group) => group.topic), ['Second Topic', 'First Topic']);
+  const incompleted = await request(app, 'POST', `/api/moderation/groups/${firstGroup.id}/incomplete`, undefined, headers);
+  assert.equal(incompleted.status, 200);
+  assert.equal(incompleted.body.group.completedAt, null);
 
   assert.equal((await request(app, 'POST', `/api/moderation/tablets/${secondId}/unpublish`, {
     author: 'Two final', riddle: 'Second final clue'
@@ -188,6 +205,14 @@ test('moderators manage group status, clue order, rejection, and unapproval', as
   queue = await request(app, 'GET', `/api/moderation/groups/${firstGroup.id}/queue`, undefined, headers);
   assert.equal(queue.body.rejected.length, 1);
   assert.equal((await request(app, 'DELETE', `/api/moderation/submissions/${secondId}`, undefined, headers)).status, 204);
+
+  assert.equal((await request(app, 'DELETE', `/api/moderation/groups/${firstGroup.id}`)).status, 401);
+  assert.equal((await request(app, 'DELETE', `/api/moderation/groups/${firstGroup.id}`, undefined, headers)).status, 204);
+  assert.deepEqual(await app.locals.tabletRepository.list(firstGroup.id), []);
+  assert.deepEqual(await app.locals.submissionRepository.list(null, firstGroup.id), []);
+  assert.equal((await request(app, 'GET', `/api/moderation/groups/${firstGroup.id}/queue`, undefined, headers)).status, 404);
+  assert.equal((await request(app, 'GET', `/api/topics/${firstGroup.id}`)).status, 404);
+  assert.equal((await request(app, 'GET', '/api/presentations')).body.presentations.length, 1);
 });
 
 test('closing and rotating a group submission link is enforced by the server', async () => {

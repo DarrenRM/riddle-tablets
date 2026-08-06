@@ -8,7 +8,7 @@
     <link rel="preload" href="/audio/noita-ancient-01.mp3?v=1" as="audio" type="audio/mpeg">
     <link rel="preload" href="/audio/noita-ancient-02.mp3?v=1" as="audio" type="audio/mpeg">
     <link rel="preload" href="/audio/noita-tablet-open-orb.mp3?v=1" as="audio" type="audio/mpeg">
-    <link rel="stylesheet" href="/style.css?v=19">
+    <link rel="stylesheet" href="/style.css?v=30">
 </head>
 <body class="archive-page">
     <main class="archive-container">
@@ -24,17 +24,15 @@
             <h1 id="active-topic-heading" class="topic-heading"></h1>
             <div id="tablet-grid" class="tablet-grid" aria-live="polite"></div>
             <div class="topic-completion-actions">
-                <button id="solve-topic-button" class="solve-topic-button hidden" type="button">Mark topic as solved</button>
+                <button id="solve-topic-button" class="solve-topic-button sampo-solve-button hidden" type="button" aria-describedby="solve-topic-flavor">
+                    <img src="/images/sampo.png" alt="" aria-hidden="true">
+                    <span>Mark topic as solved</span>
+                    <small id="solve-topic-flavor">There's no undo button.</small>
+                </button>
             </div>
         </section>
 
-        <section id="solved-topic" class="topic-section solved-topic hidden" aria-labelledby="solved-topic-heading">
-            <div class="solved-topic-heading-row">
-                <h2 id="solved-topic-heading" class="topic-heading"></h2>
-                <button id="return-topic-button" class="return-topic-button" type="button">Return to active</button>
-            </div>
-            <div id="solved-tablet-grid" class="tablet-grid"></div>
-        </section>
+        <div id="solved-topics" class="solved-topics hidden" aria-live="polite"></div>
 
         <section id="topic-error" class="archive-empty hidden">
             <div class="archive-empty-mark" aria-hidden="true">✦</div>
@@ -51,9 +49,6 @@
             <div id="topic-archive-list" class="topic-archive-list"></div>
         </section>
 
-        <nav id="archive-link-wrap" class="archive-link-wrap hidden" aria-label="Topic history">
-            <a href="/archive" class="text-link">Past topics</a>
-        </nav>
     </main>
 
     <div id="completion-celebration" class="completion-celebration" role="dialog" aria-modal="true" aria-label="Topic solved" aria-hidden="true">
@@ -68,6 +63,6 @@
     <audio id="tablet-open-sound" preload="auto" aria-hidden="true">
         <source src="/audio/noita-tablet-open-orb.mp3?v=1" type="audio/mpeg">
     </audio>
-    <script type="module" src="/gallery.js?v=18"></script>
+    <script type="module" src="/gallery.js?v=24"></script>
 </body>
 </html>

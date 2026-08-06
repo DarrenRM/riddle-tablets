@@ -10,10 +10,9 @@ A moderated, episodic gallery of animated community riddle tablets.
 - Pending clues remain private until a moderator approves them.
 - Approved clues can be edited and ordered within their group.
 - Exactly one topic group can be active on `/` at a time.
-- Activating a topic archives the previously active topic.
-- `/archive` lists previously presented topics.
+- Activating a topic makes the previously active topic a previous presentation.
 
-Tablet reveal state and topic completion are stored in each visitor's browser. Marking a topic solved moves all its clues into a local `Solved: <topic>` section without changing anyone else's experience.
+Tablet reveal state and topic completion are stored in each visitor's browser. Marking a topic solved moves all its clues below the active presentation, where that visitor's solved topics accumulate without changing anyone else's experience. The public page does not expose presentation controls or a link to the historical topic index.
 
 Public submissions are validated, checked by a honeypot, and rate-limited by IP. Rejected clues are retained until restored or permanently deleted. Approved clues can be edited or returned to the rejected queue.
 
@@ -30,7 +29,7 @@ Open:
 
 - Gallery: <http://127.0.0.1:3000/>
 - Password-gated moderation: <http://127.0.0.1:3000/approve>
-- Topic archive: <http://127.0.0.1:3000/archive>
+- Direct historical topic index (not linked publicly): <http://127.0.0.1:3000/archive>
 
 Create a topic from the moderation page to obtain its submission URL. The generic `/submit` page intentionally does not accept clues without a topic-specific token.
 

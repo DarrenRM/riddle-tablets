@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Riddle Review</title>
-    <link rel="stylesheet" href="/style.css?v=19">
+    <link rel="stylesheet" href="/style.css?v=30">
 </head>
 <body class="approve-page">
     <div class="approve-container group-approve-container">
@@ -48,7 +48,6 @@
                         <div class="group-title-row">
                             <input id="group-topic-input" type="text" maxlength="120" required>
                             <button id="save-group-topic" type="button">Save topic</button>
-                            <span id="group-status-badge" class="group-status-badge"></span>
                         </div>
                     </div>
 
@@ -57,16 +56,13 @@
                         <div class="group-link-row">
                             <input id="group-submission-link" type="text" readonly>
                             <button id="copy-group-link" type="button">Copy link</button>
-                            <a id="open-group-form" class="button-link" target="_blank" rel="noopener">Open form</a>
                         </div>
                     </div>
 
                     <div class="group-controls">
                         <button id="toggle-group-submissions" type="button"></button>
-                        <a id="preview-group" class="button-link" target="_blank" rel="noopener">Preview</a>
                         <button id="activate-group" type="button" class="approve-button">Make active</button>
-                        <button id="archive-group" type="button" class="reject-button">Archive</button>
-                        <button id="reset-group-link" type="button" class="quiet-button">Reset submission link</button>
+                        <button id="toggle-group-completion" type="button" class="quiet-button"></button>
                     </div>
                 </header>
 
@@ -107,12 +103,11 @@
             </label>
             <div class="dialog-actions dialog-actions-wide">
                 <button id="copy-created-group-link" type="button">Copy link</button>
-                <a id="open-created-group-form" class="button-link" target="_blank" rel="noopener">Open form</a>
                 <button type="button" data-close-dialog>Done</button>
             </div>
         </section>
     </dialog>
 
-    <script type="module" src="/approve.js?v=2"></script>
+    <script type="module" src="/approve.js?v=11"></script>
 </body>
 </html>
