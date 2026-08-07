@@ -241,6 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function installMasonry(targetGrid, cards) {
         let animationFrame = 0;
+        targetGrid.classList.toggle('single-tablet-grid', cards.length === 1);
         const columnCount = () => {
             if (window.matchMedia('(max-width: 620px)').matches) return 1;
             if (window.matchMedia('(max-width: 1100px)').matches) return 2;
@@ -249,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const layout = () => {
             animationFrame = 0;
             if (!cards.length || targetGrid.classList.contains('hidden')) return;
-            const columns = columnCount();
+            const columns = cards.length === 1 ? 1 : columnCount();
             const gap = parseFloat(getComputedStyle(targetGrid).columnGap) || 19.2;
             const cardWidth = (targetGrid.clientWidth - gap * (columns - 1)) / columns;
             const columnBottoms = Array(columns).fill(0);
@@ -284,12 +285,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateSolveVisibility() {
         const group = currentPresentation.group;
         const anyRevealed = currentPresentation.tablets.some((tablet) => loadRevealedTabletIds().has(tablet.id));
-        solveButton.classList.toggle('hidden', mode === 'preview' || !group || !anyRevealed || loadSolvedGroupIds().has(group.id));
+        const usesIntegratedCompletion = currentPresentation.tablets.length === 1;
+        solveButton.classList.toggle(
+            'hidden',
+            mode === 'preview' || !group || usesIntegratedCompletion || !anyRevealed || loadSolvedGroupIds().has(group.id)
+        );
     }
 
-    function createTablet(tablet, wasRevealed) {
+    function createTablet(tablet, wasRevealed, { canCompleteTopic = false } = {}) {
         const card = document.createElement('article');
         card.className = `riddle-tablet${wasRevealed ? ' revealed' : ''}`;
+        card.classList.toggle('single-topic-tablet', canCompleteTopic);
         card.setAttribute('aria-expanded', String(wasRevealed));
 
         const toggle = document.createElement('button');
@@ -336,7 +342,10 @@ document.addEventListener('DOMContentLoaded', () => {
             card.setAttribute('aria-expanded', String(expanded));
             toggle.setAttribute('aria-expanded', String(expanded));
             toggle.setAttribute('aria-label', `${expanded ? 'Close' : 'Open'} clue by ${tablet.author}`);
-            prompt.textContent = expanded ? 'Close tablet' : 'Reveal tablet';
+            prompt.classList.toggle('single-topic-solve-prompt', expanded && canCompleteTopic);
+            prompt.textContent = expanded
+                ? (canCompleteTopic ? 'Mark as Solved' : 'Close tablet')
+                : 'Reveal tablet';
         };
 
         const openTablet = () => {
@@ -379,7 +388,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         prompt.addEventListener('click', () => {
             if (card.classList.contains('revealing')) return;
-            if (card.classList.contains('revealed')) closeTablet();
+            if (card.classList.contains('revealed') && canCompleteTopic) celebrateCompletion();
+            else if (card.classList.contains('revealed')) closeTablet();
             else openTablet();
         });
 
@@ -447,7 +457,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.title = `${group.topic} · Riddle Tablets`;
         } else if (!currentSolved) {
             document.title = `${group.topic} · Riddle Tablets`;
-            const cards = tablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id)));
+            const canCompleteSingleTopic = mode !== 'preview' && tablets.length === 1;
+            const cards = tablets.map((tablet) => createTablet(
+                tablet,
+                revealed.has(tablet.id),
+                { canCompleteTopic: canCompleteSingleTopic }
+            ));
             activeHeading.textContent = group.topic;
             grid.replaceChildren(...cards);
             activeSection.classList.remove('hidden');

@@ -9,7 +9,7 @@ const {
   createDefaultGroupRepository,
   createDefaultSubmissionRepository,
   createDefaultTabletRepository,
-  resolveRedisCredentials
+  resolveStorageCredentials
 } = require('./lib/tablet-repository');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -97,7 +97,7 @@ function rateLimitIdentifier(req) {
 }
 
 function createDefaultSubmissionLimiter(config) {
-  const credentials = resolveRedisCredentials();
+  const credentials = resolveStorageCredentials();
   if (credentials) {
     return new RedisWindowRateLimiter({
       ...credentials,
@@ -740,7 +740,7 @@ function createApp(options = {}) {
         active_group_configured: Boolean(active),
         moderator_password_configured: Boolean(config.moderatorPassword),
         create_password_configured: Boolean(config.moderatorPassword),
-        shared_storage: Boolean(resolveRedisCredentials())
+        shared_storage: Boolean(resolveStorageCredentials())
       });
     } catch (error) {
       next(error);

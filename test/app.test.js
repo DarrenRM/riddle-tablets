@@ -1,15 +1,26 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const http = require('node:http');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 const { createApp, RateLimiter } = require('../app');
 const {
   MemoryGroupRepository,
   MemorySubmissionRepository,
   MemoryTabletRepository,
+  JsonGroupRepository,
+  JsonSubmissionRepository,
+  JsonTabletRepository,
   UpstashGroupRepository,
-  resolveRedisCredentials
+  createDefaultGroupRepository,
+  createDefaultSubmissionRepository,
+  createDefaultTabletRepository,
+  isVercelProductionRuntime,
+  resolveRedisCredentials,
+  resolveStorageCredentials
 } = require('../lib/tablet-repository');
 
 async function request(app, method, route, body, extraHeaders = {}) {
@@ -265,6 +276,51 @@ test('shared storage accepts both Upstash and Vercel KV environment names', () =
     KV_REST_API_URL: 'https://kv.example',
     KV_REST_API_TOKEN: 'kv-token'
   }), { url: 'https://kv.example', token: 'kv-token' });
+});
+
+test('local storage stays on JSON files even when remote credentials are present', () => {
+  const remoteEnvironment = {
+    UPSTASH_REDIS_REST_URL: 'https://production.example',
+    UPSTASH_REDIS_REST_TOKEN: 'production-token',
+    VERCEL: '1',
+    VERCEL_ENV: 'development',
+    VERCEL_URL: 'local-preview.example'
+  };
+  assert.equal(isVercelProductionRuntime(remoteEnvironment), false);
+  assert.equal(resolveStorageCredentials(remoteEnvironment), null);
+
+  const rootDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'riddle-tablets-local-'));
+  try {
+    assert.ok(createDefaultGroupRepository(rootDirectory, remoteEnvironment) instanceof JsonGroupRepository);
+    assert.ok(createDefaultTabletRepository(rootDirectory, remoteEnvironment) instanceof JsonTabletRepository);
+    assert.ok(createDefaultSubmissionRepository(rootDirectory, remoteEnvironment) instanceof JsonSubmissionRepository);
+  } finally {
+    fs.rmSync(rootDirectory, { recursive: true, force: true });
+  }
+});
+
+test('only the live Vercel production runtime can select Redis storage', () => {
+  const productionEnvironment = {
+    UPSTASH_REDIS_REST_URL: 'https://production.example',
+    UPSTASH_REDIS_REST_TOKEN: 'production-token',
+    VERCEL: '1',
+    VERCEL_ENV: 'production',
+    VERCEL_URL: 'riddle-tablets.vercel.app'
+  };
+  assert.equal(isVercelProductionRuntime(productionEnvironment), true);
+  assert.deepEqual(resolveStorageCredentials(productionEnvironment), {
+    url: 'https://production.example',
+    token: 'production-token'
+  });
+  assert.equal(resolveStorageCredentials({
+    ...productionEnvironment,
+    RIDDLE_TABLETS_STORAGE: 'local'
+  }), null);
+  assert.throws(() => resolveStorageCredentials({
+    ...productionEnvironment,
+    VERCEL_ENV: 'development',
+    RIDDLE_TABLETS_STORAGE: 'redis'
+  }), /restricted to the Vercel production runtime/);
 });
 
 test('collection endpoints batch tablet and submission reads', async () => {

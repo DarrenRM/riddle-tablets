@@ -33,7 +33,17 @@ Open:
 
 Create a topic from the moderation page to obtain its submission URL. The generic `/submit` page intentionally does not accept clues without a topic-specific token.
 
-Without Upstash credentials, local groups, approved tablets, and submissions persist to ignored JSON files under `data/`.
+To start a fresh local test run, use `npm run db:reset`. That command only rewrites
+the three ignored `data/*.local.json` files and never contacts Redis.
+
+Local runs use a separate, ignored JSON test database under `data/` (`groups.local.json`,
+`tablets.local.json`, and `submissions.local.json`). This is the default even if Redis
+credentials happen to be present in your shell, so local testing cannot write to the
+production database. `RIDDLE_TABLETS_STORAGE=local` in `.env` makes that choice explicit.
+
+The deployed Vercel production runtime is the only runtime allowed to use Redis. Preview
+deployments and local runs stay isolated from production. If you ever need to inspect the
+local test database, stop the server first and open the three JSON files directly.
 
 ## Vercel deployment
 

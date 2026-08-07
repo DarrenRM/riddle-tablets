@@ -246,6 +246,56 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
     assert.equal(await page.getByRole('link', { name: 'Past topics' }).count(), 0);
 
+    const singleGrid = page.locator('#tablet-grid');
+    const singleCard = singleGrid.locator('.riddle-tablet');
+    await page.waitForFunction(() => document.querySelector('#tablet-grid').classList.contains('masonry-ready'));
+    const [singleGridBox, singleCardBox] = await Promise.all([singleGrid.boundingBox(), singleCard.boundingBox()]);
+    assert.equal(await singleGrid.evaluate((element) => element.classList.contains('single-tablet-grid')), true);
+    assert.ok(singleGridBox.width <= 720);
+    assert.ok(Math.abs((singleCardBox.x + (singleCardBox.width / 2)) - 720) < 1);
+    assert.equal(await page.locator('#solve-topic-button').isVisible(), false);
+
+    await singleCard.getByRole('button', { name: 'Reveal tablet' }).click();
+    await page.waitForFunction(() => document.querySelector('#tablet-grid .riddle-tablet').classList.contains('revealed'));
+    const integratedSolve = singleCard.getByRole('button', { name: 'Mark as Solved' });
+    assert.equal(await integratedSolve.isVisible(), true);
+    await page.waitForTimeout(250);
+    assert.match(
+      await integratedSolve.evaluate((element) => getComputedStyle(element).color),
+      /98, 96, 112/
+    );
+    assert.equal(
+      await integratedSolve.evaluate((element) => getComputedStyle(element, '::before').opacity),
+      '0'
+    );
+    assert.match(
+      await integratedSolve.evaluate((element) => getComputedStyle(element, '::before').backgroundImage),
+      /sampo\.png/
+    );
+    await integratedSolve.hover();
+    await page.waitForTimeout(250);
+    assert.match(
+      await integratedSolve.evaluate((element) => getComputedStyle(element).color),
+      /240, 192, 64/
+    );
+    assert.equal(
+      await integratedSolve.evaluate((element) => getComputedStyle(element, '::before').opacity),
+      '1'
+    );
+    assert.equal(await page.locator('#solve-topic-button').isVisible(), false);
+
+    await page.goto(`${origin}/preview/topics/${nextGroup.id}`, { waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('#tablet-grid .riddle-tablet').getByRole('button', { name: 'Close tablet' }).isVisible(), true);
+    assert.equal(await page.getByRole('button', { name: 'Mark as Solved' }).count(), 0);
+    assert.equal(await page.locator('#solve-topic-button').isVisible(), false);
+
+    await page.goto(origin, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => { Math.random = () => 0.75; });
+    await page.getByRole('button', { name: 'Mark as Solved' }).click();
+    await page.locator('#completion-celebration[data-phase="success"]').waitFor();
+    assert.equal(await page.locator('#waiting-state').isVisible(), true);
+    assert.equal(await page.locator('.solved-topic').count(), 2);
+
     await page.goto(`${origin}/approve`, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.group-list-item-active .group-mini-status').count(), 1);
     assert.equal(await page.locator('.group-list-item-archived .status-done').count(), 1);
