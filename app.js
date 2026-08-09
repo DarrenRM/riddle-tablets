@@ -114,7 +114,11 @@ function createDefaultSubmissionLimiter(config) {
 function publicGroup(group) {
   if (!group) return null;
   const { submissionToken, completedAt, ...safe } = group;
-  return safe;
+  // Treat legacy completed records as archived even before their persisted
+  // status is repaired. Public consumers must never see active + completed.
+  return completedAt && safe.status !== 'archived'
+    ? { ...safe, status: 'archived' }
+    : safe;
 }
 
 function recordsByGroup(records) {

@@ -148,6 +148,52 @@ test('groups keep clues private until moderators approve and activate the topic'
   assert.equal(queue.body.approved.length, 1);
 });
 
+test('completing a topic atomically archives it without removing its clues or submissions', async () => {
+  const app = createTestApp();
+  const cookie = await moderatorCookie(app);
+  const headers = { Cookie: cookie };
+  const group = await createGroup(app, headers, 'Finished Topic');
+  const submitted = await submitClue(app, group, 'Scribe', 'A preserved clue.');
+  const submissionId = submitted.body.submission.id;
+  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${submissionId}/approve`, {
+    author: 'Scribe', riddle: 'A preserved clue.'
+  }, headers)).status, 200);
+  assert.equal((await submitClue(app, group, 'Waiting Scribe', 'A preserved pending clue.')).status, 202);
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${group.id}/activate`, undefined, headers)).status, 200);
+  assert.equal((await request(app, 'GET', '/api/presentation')).body.group.status, 'active');
+
+  const completed = await request(app, 'POST', `/api/moderation/groups/${group.id}/complete`, undefined, headers);
+  assert.equal(completed.status, 200);
+  assert.equal(completed.body.group.status, 'archived');
+  assert.ok(completed.body.group.completedAt);
+  assert.equal((await request(app, 'GET', '/api/presentation')).body.group, null);
+  assert.equal((await app.locals.tabletRepository.list(group.id)).length, 1);
+  assert.equal((await app.locals.submissionRepository.list(null, group.id)).length, 1);
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${group.id}/open`, undefined, headers)).status, 409);
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${group.id}/activate`, undefined, headers)).status, 409);
+
+  const incomplete = await request(app, 'POST', `/api/moderation/groups/${group.id}/incomplete`, undefined, headers);
+  assert.equal(incomplete.status, 200);
+  assert.equal(incomplete.body.group.status, 'archived');
+  assert.equal(incomplete.body.group.completedAt, null);
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${group.id}/activate`, undefined, headers)).status, 200);
+});
+
+test('legacy active plus completed records are treated as archived by public APIs', async () => {
+  const groups = new MemoryGroupRepository();
+  const group = await groups.create({ topic: 'Legacy Done Topic' });
+  await groups.setStatus(group.id, 'active');
+  groups.groups[0].completedAt = Date.now();
+  const tablets = new MemoryTabletRepository();
+  await tablets.save({ groupId: group.id, topic: group.topic, author: 'Scribe', riddle: 'Still preserved.' });
+  const app = createTestApp({ groupRepository: groups, tabletRepository: tablets });
+
+  assert.equal((await request(app, 'GET', '/api/presentation')).body.group, null);
+  const presentations = await request(app, 'GET', '/api/presentations');
+  assert.equal(presentations.body.presentations[0].group.status, 'archived');
+  assert.equal(presentations.body.presentations[0].tablets.length, 1);
+});
+
 test('moderators manage group status, clue order, rejection, and unapproval', async () => {
   const app = createTestApp();
   const cookie = await moderatorCookie(app);
@@ -394,6 +440,11 @@ test('shared group mutations serialize competing activations', async () => {
       return Object.keys(writes).length;
     }
 
+    async hget(key, id) {
+      const group = this.hash.get(id);
+      return group ? { ...group } : null;
+    }
+
     async set(key, value, options = {}) {
       if (options.nx && this.values.has(key)) return null;
       this.values.set(key, value);
@@ -433,4 +484,13 @@ test('shared group mutations serialize competing activations', async () => {
 
   const records = await groups.list();
   assert.equal(records.filter((group) => group.status === 'active').length, 1);
+  const active = records.find((group) => group.status === 'active');
+  const completed = await groups.setCompleted(active.id, true);
+  assert.equal(completed.status, 'archived');
+  assert.ok(completed.completedAt);
+  assert.equal(await groups.getActive(), null);
+  await assert.rejects(() => groups.setStatus(active.id, 'active'), (error) => error.code === 'group_conflict');
+  const incomplete = await groups.setCompleted(active.id, false);
+  assert.equal(incomplete.status, 'archived');
+  assert.equal(incomplete.completedAt, null);
 });

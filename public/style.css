@@ -304,47 +304,9 @@ button:disabled {
 }
 
 .revealed .single-topic-solve-prompt {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.55rem;
+    display: block;
     color: var(--muted);
     cursor: pointer;
-}
-
-.revealed .single-topic-solve-prompt::before,
-.revealed .single-topic-solve-prompt::after {
-    width: 1.45rem;
-    height: 1.45rem;
-    flex: 0 0 auto;
-    background: url('/images/sampo.png') center / contain no-repeat;
-    content: '';
-    image-rendering: pixelated;
-    opacity: 0;
-    filter: drop-shadow(0 0 4px rgba(106, 224, 255, 0.35));
-    transition: opacity 180ms ease, filter 180ms ease, transform 180ms ease;
-}
-
-.revealed .single-topic-solve-prompt::before {
-    transform: translateX(0.2rem) rotate(-8deg) scale(0.82);
-}
-
-.revealed .single-topic-solve-prompt::after {
-    transform: translateX(-0.2rem) rotate(8deg) scale(0.82);
-}
-
-.revealed .single-topic-solve-prompt:hover::before,
-.revealed .single-topic-solve-prompt:focus-visible::before {
-    opacity: 1;
-    filter: drop-shadow(0 0 9px rgba(106, 224, 255, 0.8));
-    transform: translateX(0) rotate(-12deg) scale(1);
-}
-
-.revealed .single-topic-solve-prompt:hover::after,
-.revealed .single-topic-solve-prompt:focus-visible::after {
-    opacity: 1;
-    filter: drop-shadow(0 0 9px rgba(106, 224, 255, 0.8));
-    transform: translateX(0) rotate(12deg) scale(1);
 }
 
 .riddle-tablet.changing-section {

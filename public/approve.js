@@ -121,9 +121,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = submissionUrl(group);
         submissionLink.value = url;
         toggleSubmissions.textContent = group.status === 'open' ? 'Close submissions' : 'Reopen submissions';
-        toggleSubmissions.disabled = group.status === 'active';
-        activateButton.disabled = group.status === 'active' || group.counts.approved === 0;
-        activateButton.textContent = group.status === 'active' ? 'Currently active' : 'Make active';
+        toggleSubmissions.disabled = group.status === 'active' || Boolean(group.completedAt);
+        activateButton.disabled = group.status === 'active' || Boolean(group.completedAt) || group.counts.approved === 0;
+        activateButton.textContent = group.completedAt
+            ? 'Mark incomplete first'
+            : (group.status === 'active' ? 'Currently active' : 'Make active');
         toggleCompletion.textContent = group.completedAt ? 'Mark incomplete' : 'Mark complete';
     }
 

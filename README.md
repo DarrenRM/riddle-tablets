@@ -11,8 +11,13 @@ A moderated, episodic gallery of animated community riddle tablets.
 - Approved clues can be edited and ordered within their group.
 - Exactly one topic group can be active on `/` at a time.
 - Activating a topic makes the previously active topic a previous presentation.
+- Marking a topic complete atomically archives and deactivates it without deleting
+  its clues or submissions. Mark it incomplete before reopening or reactivating it.
 
-Tablet reveal state and topic completion are stored in each visitor's browser. Marking a topic solved moves all its clues below the active presentation, where that visitor's solved topics accumulate without changing anyone else's experience. The public page does not expose presentation controls or a link to the historical topic index.
+Tablet reveal state and each visitor's personal solved-topic history are stored in that
+visitor's browser. Marking a topic solved moves all its clues below the active presentation,
+where that visitor's solved topics accumulate without changing anyone else's experience.
+The public page does not expose presentation controls or a link to the historical topic index.
 
 Public submissions are validated, checked by a honeypot, and rate-limited by IP. Rejected clues are retained until restored or permanently deleted. Approved clues can be edited or returned to the rejected queue.
 
@@ -44,6 +49,15 @@ production database. `RIDDLE_TABLETS_STORAGE=local` in `.env` makes that choice 
 The deployed Vercel production runtime is the only runtime allowed to use Redis. Preview
 deployments and local runs stay isolated from production. If you ever need to inspect the
 local test database, stop the server first and open the three JSON files directly.
+
+The production completion migration is dry-run by default and always writes a complete,
+ignored backup beneath `artifacts/production-backups/` before reporting or changing records:
+
+```powershell
+vercel env pull .env.production.local --environment production --yes
+node --env-file=.env.production.local scripts/migrate-completed-groups.js
+node --env-file=.env.production.local scripts/migrate-completed-groups.js --apply
+```
 
 ## Vercel deployment
 

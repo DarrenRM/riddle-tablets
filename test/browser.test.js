@@ -154,7 +154,14 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('#toggle-group-completion').textContent(), 'Mark complete');
     await page.locator('#toggle-group-completion').click();
     await page.waitForFunction(() => document.querySelector('#toggle-group-completion').textContent === 'Mark incomplete');
+    assert.equal(await page.locator('#toggle-group-submissions').isDisabled(), true);
+    assert.equal(await page.locator('#activate-group').isDisabled(), true);
+    assert.equal(await page.locator('#activate-group').textContent(), 'Mark incomplete first');
+    await page.locator('#toggle-group-completion').click();
+    await page.waitForFunction(() => document.querySelector('#toggle-group-completion').textContent === 'Mark complete');
 
+    await page.locator('#toggle-group-submissions').click();
+    await page.waitForFunction(() => document.querySelector('#toggle-group-submissions').textContent === 'Close submissions');
     await page.locator('#toggle-group-submissions').click();
     await page.waitForFunction(() => document.querySelector('#toggle-group-submissions').textContent === 'Reopen submissions');
     const waitingPage = await context.newPage();
@@ -264,23 +271,16 @@ test('topic creation, submission, moderation, presentation, and local group comp
       await integratedSolve.evaluate((element) => getComputedStyle(element).color),
       /98, 96, 112/
     );
+    assert.equal(await integratedSolve.textContent(), 'Mark as Solved');
     assert.equal(
-      await integratedSolve.evaluate((element) => getComputedStyle(element, '::before').opacity),
-      '0'
-    );
-    assert.match(
-      await integratedSolve.evaluate((element) => getComputedStyle(element, '::before').backgroundImage),
-      /sampo\.png/
+      await integratedSolve.evaluate((element) => getComputedStyle(element, '::before').content),
+      'none'
     );
     await integratedSolve.hover();
     await page.waitForTimeout(250);
     assert.match(
       await integratedSolve.evaluate((element) => getComputedStyle(element).color),
       /240, 192, 64/
-    );
-    assert.equal(
-      await integratedSolve.evaluate((element) => getComputedStyle(element, '::before').opacity),
-      '1'
     );
     assert.equal(await page.locator('#solve-topic-button').isVisible(), false);
 
@@ -297,14 +297,30 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('.solved-topic').count(), 2);
 
     await page.goto(`${origin}/approve`, { waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.group-list-item-active .group-mini-status').count(), 1);
+    await page.locator('.group-list-item').filter({ hasText: 'The Moon' }).click();
+    await page.locator('#toggle-group-completion').click();
+    await page.waitForFunction(() => document.querySelector('#toggle-group-completion').textContent === 'Mark incomplete');
+    assert.equal(await page.locator('.group-list-item-active .group-mini-status').count(), 0);
     assert.equal(await page.locator('.group-list-item-archived .status-done').count(), 1);
-    assert.deepEqual(await page.locator('.group-list-item').evaluateAll((items) => items.map((item) => item.querySelector('strong').textContent)), ['The Moon', 'The Work']);
+    assert.deepEqual(
+      (await page.locator('.group-list-item').evaluateAll((items) => items.map((item) => item.querySelector('strong').textContent))).sort(),
+      ['The Moon', 'The Work'].sort()
+    );
+
+    const completedContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const completedPage = await completedContext.newPage();
+    await completedPage.goto(origin, { waitUntil: 'domcontentloaded' });
+    assert.equal(await completedPage.locator('#waiting-state').isVisible(), true);
+    assert.equal(await completedPage.locator('#active-topic').isVisible(), false);
+    await completedContext.close();
 
     await page.goto(`${origin}/archive`, { waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.topic-archive-card').count(), 1);
-    assert.equal(await page.locator('.topic-archive-card strong').textContent(), 'The Work');
-    await page.locator('.topic-archive-card').click();
+    assert.equal(await page.locator('.topic-archive-card').count(), 2);
+    assert.deepEqual(
+      (await page.locator('.topic-archive-card strong').allTextContents()).sort(),
+      ['The Moon', 'The Work'].sort()
+    );
+    await page.locator('.topic-archive-card').filter({ hasText: 'The Work' }).click();
     assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
 
     const racePage = await context.newPage();
