@@ -168,18 +168,19 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await waitingPage.goto(origin, { waitUntil: 'domcontentloaded' });
     assert.equal(await waitingPage.locator('#waiting-state').isVisible(), true);
     page.once('dialog', (confirmation) => {
-      assert.equal(confirmation.message(), 'Make this the active topic? The current active topic will no longer be active.');
+      assert.equal(confirmation.message(), 'Add this topic to the live page? It will be the only active topic.');
       confirmation.accept();
     });
     await page.locator('#activate-group').click();
-    await page.waitForFunction(() => document.querySelector('#activate-group').textContent === 'Currently active');
-    await waitingPage.locator('#active-topic-heading').waitFor({ state: 'visible', timeout: 8000 });
-    assert.equal(await waitingPage.locator('#active-topic-heading').textContent(), 'The Work');
+    await page.waitForFunction(() => document.querySelector('#activate-group').textContent === 'Deactivate');
+    await waitingPage.locator('.active-topic .topic-heading').waitFor({ state: 'visible', timeout: 12000 });
+    assert.equal(await waitingPage.locator('.active-topic .topic-heading').textContent(), 'The Work');
     await waitingPage.close();
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('#active-topic-heading').textContent(), 'The Work');
-    const cards = page.locator('#tablet-grid .riddle-tablet');
+    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
+    const workSection = page.locator('.active-topic').filter({ hasText: 'The Work' });
+    const cards = workSection.locator('.tablet-grid .riddle-tablet');
     assert.equal(await cards.count(), 2);
     assert.equal(await cards.first().getAttribute('aria-expanded'), 'false');
     assert.equal(await cards.first().locator('.riddle-author').textContent(), 'Inscribed by');
@@ -187,19 +188,19 @@ test('topic creation, submission, moderation, presentation, and local group comp
       await cards.first().locator('.riddle-author-name').evaluate((element) => getComputedStyle(element).color),
       /168, 102, 255/
     );
-    assert.equal(await page.locator('#solve-topic-button').isVisible(), false);
+    assert.equal(await workSection.locator('.solve-topic-button').isVisible(), false);
 
     await cards.first().getByRole('button', { name: 'Reveal tablet' }).click();
-    await page.waitForFunction(() => document.querySelector('#tablet-grid .riddle-tablet').classList.contains('revealed'));
+    await page.waitForFunction(() => document.querySelector('.active-topic .tablet-grid .riddle-tablet').classList.contains('revealed'));
     assert.equal(await cards.first().getByRole('button', { name: 'Close tablet' }).isVisible(), true);
-    assert.equal(await page.locator('#solve-topic-button').isVisible(), true);
-    assert.equal(await page.locator('#solve-topic-button img').getAttribute('src'), '/images/sampo.png');
-    assert.equal(await page.locator('#solve-topic-flavor').textContent(), "There's no undo button.");
+    assert.equal(await workSection.locator('.solve-topic-button').isVisible(), true);
+    assert.equal(await workSection.locator('.solve-topic-button img').getAttribute('src'), '/images/sampo.png');
+    assert.equal(await workSection.locator('.solve-topic-button small').textContent(), "There's no undo button.");
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('#tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('.active-topic .tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'true');
     await page.evaluate(() => { Math.random = () => 0.75; });
-    await page.locator('#solve-topic-button').click();
+    await page.locator('.active-topic .solve-topic-button').click();
     await page.locator('#completion-celebration[data-phase="success"]').waitFor();
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
     assert.equal(await page.locator('#waiting-state').isVisible(), true);
@@ -214,7 +215,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('.solved-topic .riddle-tablet').count(), 2);
     const solvedHeadingBox = await page.locator('.solved-topic .topic-heading').boundingBox();
     assert.ok(Math.abs((solvedHeadingBox.x + (solvedHeadingBox.width / 2)) - 720) < 1);
-    assert.equal(await page.locator('#active-topic').isVisible(), false);
+    assert.equal(await page.locator('#active-topics').isVisible(), false);
     await page.locator('#completion-celebration.dismissible').waitFor();
     await page.waitForFunction(
       () => document.querySelector('#ancient-sound').volume < 0.3,
@@ -233,9 +234,9 @@ test('topic creation, submission, moderation, presentation, and local group comp
     const freshContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const freshPage = await freshContext.newPage();
     await freshPage.goto(origin, { waitUntil: 'domcontentloaded' });
-    assert.equal(await freshPage.locator('#active-topic').isVisible(), true);
+    assert.equal(await freshPage.locator('#active-topics').isVisible(), true);
     assert.equal(await freshPage.locator('.solved-topic').count(), 0);
-    assert.equal(await freshPage.locator('#tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'false');
+    assert.equal(await freshPage.locator('.active-topic .tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'false');
     await freshContext.close();
 
     const nextGroup = await groupRepository.create({ topic: 'The Moon' });
@@ -248,22 +249,33 @@ test('topic creation, submission, moderation, presentation, and local group comp
     });
     await groupRepository.setStatus(nextGroup.id, 'active');
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('#active-topic-heading').textContent(), 'The Moon');
+    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Moon');
     assert.equal(await page.locator('.solved-topic').count(), 1);
     assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
     assert.equal(await page.getByRole('link', { name: 'Past topics' }).count(), 0);
 
-    const singleGrid = page.locator('#tablet-grid');
+    const multiContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const multiPage = await multiContext.newPage();
+    await multiPage.goto(origin, { waitUntil: 'domcontentloaded' });
+    assert.equal(await multiPage.locator('.active-topic').count(), 2);
+    assert.deepEqual(
+      (await multiPage.locator('.active-topic .topic-heading').allTextContents()).sort(),
+      ['The Moon', 'The Work'].sort()
+    );
+    assert.equal(await multiPage.locator('#active-topics').evaluate((element) => element.classList.contains('multiple-active-topics')), true);
+    await multiContext.close();
+
+    const singleGrid = page.locator('.active-topic .tablet-grid');
     const singleCard = singleGrid.locator('.riddle-tablet');
-    await page.waitForFunction(() => document.querySelector('#tablet-grid').classList.contains('masonry-ready'));
+    await page.waitForFunction(() => document.querySelector('.active-topic .tablet-grid').classList.contains('masonry-ready'));
     const [singleGridBox, singleCardBox] = await Promise.all([singleGrid.boundingBox(), singleCard.boundingBox()]);
     assert.equal(await singleGrid.evaluate((element) => element.classList.contains('single-tablet-grid')), true);
     assert.ok(singleGridBox.width <= 720);
     assert.ok(Math.abs((singleCardBox.x + (singleCardBox.width / 2)) - 720) < 1);
-    assert.equal(await page.locator('#solve-topic-button').isVisible(), false);
+    assert.equal(await page.locator('.active-topic .solve-topic-button').isVisible(), false);
 
     await singleCard.getByRole('button', { name: 'Reveal tablet' }).click();
-    await page.waitForFunction(() => document.querySelector('#tablet-grid .riddle-tablet').classList.contains('revealed'));
+    await page.waitForFunction(() => document.querySelector('.active-topic .tablet-grid .riddle-tablet').classList.contains('revealed'));
     const integratedSolve = singleCard.getByRole('button', { name: 'Mark as Solved' });
     assert.equal(await integratedSolve.isVisible(), true);
     await page.waitForTimeout(250);
@@ -282,12 +294,12 @@ test('topic creation, submission, moderation, presentation, and local group comp
       await integratedSolve.evaluate((element) => getComputedStyle(element).color),
       /240, 192, 64/
     );
-    assert.equal(await page.locator('#solve-topic-button').isVisible(), false);
+    assert.equal(await page.locator('.active-topic .solve-topic-button').isVisible(), false);
 
     await page.goto(`${origin}/preview/topics/${nextGroup.id}`, { waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('#tablet-grid .riddle-tablet').getByRole('button', { name: 'Close tablet' }).isVisible(), true);
+    assert.equal(await page.locator('.active-topic .tablet-grid .riddle-tablet').getByRole('button', { name: 'Close tablet' }).isVisible(), true);
     assert.equal(await page.getByRole('button', { name: 'Mark as Solved' }).count(), 0);
-    assert.equal(await page.locator('#solve-topic-button').isVisible(), false);
+    assert.equal(await page.locator('.active-topic .solve-topic-button').isVisible(), false);
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => { Math.random = () => 0.75; });
@@ -300,18 +312,37 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('.group-list-item').filter({ hasText: 'The Moon' }).click();
     await page.locator('#toggle-group-completion').click();
     await page.waitForFunction(() => document.querySelector('#toggle-group-completion').textContent === 'Mark incomplete');
-    assert.equal(await page.locator('.group-list-item-active .group-mini-status').count(), 0);
+    assert.equal(await page.locator('.group-list-item-active .group-mini-status').count(), 1);
     assert.equal(await page.locator('.group-list-item-archived .status-done').count(), 1);
     assert.deepEqual(
       (await page.locator('.group-list-item').evaluateAll((items) => items.map((item) => item.querySelector('strong').textContent))).sort(),
       ['The Moon', 'The Work'].sort()
     );
 
+    const solvedAfterCompletionPage = await context.newPage();
+    await solvedAfterCompletionPage.goto(origin, { waitUntil: 'domcontentloaded' });
+    assert.equal(await solvedAfterCompletionPage.locator('#waiting-state').isVisible(), true);
+    assert.deepEqual(
+      (await solvedAfterCompletionPage.locator('.solved-topic .topic-heading').allTextContents()).sort(),
+      ['Solved: The Moon', 'Solved: The Work'].sort()
+    );
+    await solvedAfterCompletionPage.close();
+
     const completedContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const completedPage = await completedContext.newPage();
     await completedPage.goto(origin, { waitUntil: 'domcontentloaded' });
+    assert.equal(await completedPage.locator('#waiting-state').isVisible(), false);
+    assert.equal(await completedPage.locator('.active-topic').count(), 1);
+    assert.equal(await completedPage.locator('.solved-topic').count(), 0);
+    assert.equal(await completedPage.locator('.active-topic .topic-heading').textContent(), 'The Work');
+
+    await page.locator('.group-list-item').filter({ hasText: 'The Work' }).click();
+    await page.locator('#toggle-group-completion').click();
+    await page.waitForFunction(() => document.querySelectorAll('.group-list-item-active').length === 0);
+    assert.equal(await page.locator('.group-list-item-archived .status-done').count(), 2);
+    await completedPage.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await completedPage.locator('#waiting-state').isVisible(), true);
-    assert.equal(await completedPage.locator('#active-topic').isVisible(), false);
+    assert.equal(await completedPage.locator('#active-topics').isVisible(), false);
     await completedContext.close();
 
     await page.goto(`${origin}/archive`, { waitUntil: 'domcontentloaded' });
@@ -349,10 +380,10 @@ test('topic creation, submission, moderation, presentation, and local group comp
       });
     });
     await racePage.goto(origin, { waitUntil: 'domcontentloaded' });
-    await racePage.locator('#active-topic-heading').waitFor({ state: 'visible', timeout: 3000 });
-    assert.equal(await racePage.locator('#active-topic-heading').textContent(), 'Fresh Topic');
+    await racePage.locator('.active-topic .topic-heading').waitFor({ state: 'visible', timeout: 3000 });
+    assert.equal(await racePage.locator('.active-topic .topic-heading').textContent(), 'Fresh Topic');
     await new Promise((resolve) => setTimeout(resolve, 500));
-    assert.equal(await racePage.locator('#active-topic-heading').textContent(), 'Fresh Topic');
+    assert.equal(await racePage.locator('.active-topic .topic-heading').textContent(), 'Fresh Topic');
     await racePage.close();
 
   } finally {

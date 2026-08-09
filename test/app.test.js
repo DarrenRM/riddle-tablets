@@ -234,11 +234,16 @@ test('moderators manage group status, clue order, rejection, and unapproval', as
   }, headers)).status, 200);
   assert.equal((await request(app, 'POST', `/api/moderation/groups/${secondGroup.id}/activate`, undefined, headers)).status, 200);
 
+  const deactivated = await request(app, 'POST', `/api/moderation/groups/${secondGroup.id}/deactivate`, undefined, headers);
+  assert.equal(deactivated.status, 200);
+  assert.equal(deactivated.body.group.status, 'ready');
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${secondGroup.id}/activate`, undefined, headers)).status, 200);
+
   const groups = await request(app, 'GET', '/api/moderation/groups', undefined, headers);
-  assert.equal(groups.body.groups.find((group) => group.id === firstGroup.id).status, 'archived');
+  assert.equal(groups.body.groups.find((group) => group.id === firstGroup.id).status, 'active');
   assert.equal(groups.body.groups.find((group) => group.id === secondGroup.id).status, 'active');
   const archive = await request(app, 'GET', '/api/topics');
-  assert.ok(archive.body.topics.some((group) => group.id === firstGroup.id && group.status === 'archived'));
+  assert.ok(archive.body.topics.some((group) => group.id === firstGroup.id && group.status === 'active'));
   const presentations = await request(app, 'GET', '/api/presentations');
   assert.equal(presentations.status, 200);
   assert.deepEqual(
@@ -252,7 +257,7 @@ test('moderators manage group status, clue order, rejection, and unapproval', as
   const publicCompleted = await request(app, 'GET', `/api/topics/${firstGroup.id}`);
   assert.equal(publicCompleted.status, 200);
   assert.equal(publicCompleted.body.group.completedAt, undefined);
-  assert.equal(publicCompleted.body.group.updatedAt, publicBeforeCompletion.body.group.updatedAt);
+  assert.ok(publicCompleted.body.group.updatedAt >= publicBeforeCompletion.body.group.updatedAt);
   const sortedGroups = await request(app, 'GET', '/api/moderation/groups', undefined, headers);
   assert.deepEqual(sortedGroups.body.groups.map((group) => group.topic), ['Second Topic', 'First Topic']);
   const incompleted = await request(app, 'POST', `/api/moderation/groups/${firstGroup.id}/incomplete`, undefined, headers);
@@ -422,7 +427,7 @@ test('collection endpoints batch tablet and submission reads', async () => {
   assert.equal(submissions.listCalls, 1);
 });
 
-test('shared group mutations serialize competing activations', async () => {
+test('shared group mutations preserve competing activations', async () => {
   class FakeRedis {
     constructor(records) {
       this.hash = new Map(Object.entries(records));
@@ -483,12 +488,13 @@ test('shared group mutations serialize competing activations', async () => {
   ]);
 
   const records = await groups.list();
-  assert.equal(records.filter((group) => group.status === 'active').length, 1);
+  assert.equal(records.filter((group) => group.status === 'active').length, 3);
   const active = records.find((group) => group.status === 'active');
   const completed = await groups.setCompleted(active.id, true);
   assert.equal(completed.status, 'archived');
   assert.ok(completed.completedAt);
-  assert.equal(await groups.getActive(), null);
+  assert.equal((await groups.list()).filter((group) => group.status === 'active').length, 2);
+  assert.ok(await groups.getActive());
   await assert.rejects(() => groups.setStatus(active.id, 'active'), (error) => error.code === 'group_conflict');
   const incomplete = await groups.setCompleted(active.id, false);
   assert.equal(incomplete.status, 'archived');

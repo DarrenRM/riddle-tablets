@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Riddle Review</title>
     <link rel="icon" type="image/png" href="/images/emerald_tablet.png">
-    <link rel="stylesheet" href="/style.css?v=30">
+    <link rel="stylesheet" href="/style.css?v=33">
 </head>
 <body class="approve-page">
     <div class="approve-container group-approve-container">
@@ -31,7 +31,10 @@
 
         <main class="group-moderation-layout">
             <aside class="group-sidebar" aria-label="Topic groups">
-                <p class="group-sidebar-label">Topics</p>
+                <div class="group-sidebar-heading">
+                    <p class="group-sidebar-label">Topics</p>
+                    <span id="active-group-count" class="active-group-count">0 active</span>
+                </div>
                 <div id="group-list" class="group-list"></div>
                 <p id="group-list-empty" class="group-list-empty hidden">Create a topic to begin collecting clues.</p>
             </aside>
@@ -109,6 +112,6 @@
         </section>
     </dialog>
 
-    <script type="module" src="/approve.js?v=11"></script>
+    <script type="module" src="/approve.js?v=12"></script>
 </body>
 </html>

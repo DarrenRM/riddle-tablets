@@ -1,5 +1,4 @@
 import {
-    getActivePresentation,
     getPreviewPresentation,
     getTopicPresentation,
     listPresentations,
@@ -16,10 +15,7 @@ import { flickerGlyphText, inscribeText } from './tablet-reveal.js';
 document.addEventListener('DOMContentLoaded', () => {
     const waiting = document.getElementById('waiting-state');
     const longleg = document.querySelector('.longleg-sprite');
-    const activeSection = document.getElementById('active-topic');
-    const activeHeading = document.getElementById('active-topic-heading');
-    const grid = document.getElementById('tablet-grid');
-    const solveButton = document.getElementById('solve-topic-button');
+    const activeTopics = document.getElementById('active-topics');
     const solvedTopics = document.getElementById('solved-topics');
     const errorState = document.getElementById('topic-error');
     const archiveView = document.getElementById('topic-archive');
@@ -37,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
         : (routeParts[0] === 'preview' ? 'preview' : (routeParts[0] === 'topics' ? 'topic' : 'active'));
     const routeId = mode === 'preview' ? routeParts[2] : (mode === 'topic' ? routeParts[1] : null);
 
-    let currentPresentation = { group: null, tablets: [] };
+    let currentPresentations = [];
     let availablePresentations = [];
     let currentSignature = '';
     let stopLayouts = () => {};
@@ -46,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let longlegIdleTimer = 0;
     let longlegHeartTimer = 0;
     let presentationLoadVersion = 0;
-    let activeRefreshInFlight = false;
 
     const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
     const scrambleCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -182,8 +177,10 @@ document.addEventListener('DOMContentLoaded', () => {
         celebrationInProgress = false;
     }
 
-    async function celebrateCompletion() {
-        const group = currentPresentation.group;
+    async function celebrateCompletion(groupId) {
+        const presentation = currentPresentations.find((candidate) => candidate.group && candidate.group.id === groupId)
+            || availablePresentations.find((candidate) => candidate.group && candidate.group.id === groupId);
+        const group = presentation && presentation.group;
         if (!group || celebrationInProgress) return;
         celebrationInProgress = true;
         stopAudio(tabletOpenSound);
@@ -282,17 +279,11 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    function updateSolveVisibility() {
-        const group = currentPresentation.group;
-        const anyRevealed = currentPresentation.tablets.some((tablet) => loadRevealedTabletIds().has(tablet.id));
-        const usesIntegratedCompletion = currentPresentation.tablets.length === 1;
-        solveButton.classList.toggle(
-            'hidden',
-            mode === 'preview' || !group || usesIntegratedCompletion || !anyRevealed || loadSolvedGroupIds().has(group.id)
-        );
-    }
-
-    function createTablet(tablet, wasRevealed, { canCompleteTopic = false } = {}) {
+    function createTablet(tablet, wasRevealed, {
+        canCompleteTopic = false,
+        onCompleteTopic = () => {},
+        onRevealStateChange = () => {}
+    } = {}) {
         const card = document.createElement('article');
         card.className = `riddle-tablet${wasRevealed ? ' revealed' : ''}`;
         card.classList.toggle('single-topic-tablet', canCompleteTopic);
@@ -359,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
             prompt.textContent = 'The tablet awakens...';
             prompt.disabled = true;
             inscribeText(riddle, tablet.riddle, { delay: 260, duration: 1500 });
-            updateSolveVisibility();
+            onRevealStateChange();
             window.setTimeout(() => {
                 if (!card.isConnected) return;
                 card.classList.remove('revealing');
@@ -374,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.classList.remove('revealed');
             setExpanded(false);
             setTabletRevealed(tablet.id, false);
-            updateSolveVisibility();
+            onRevealStateChange();
             window.setTimeout(() => {
                 if (!card.classList.contains('revealed') && !card.classList.contains('revealing')) riddle.replaceChildren();
             }, reduceMotion ? 0 : 620);
@@ -388,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         prompt.addEventListener('click', () => {
             if (card.classList.contains('revealing')) return;
-            if (card.classList.contains('revealed') && canCompleteTopic) celebrateCompletion();
+            if (card.classList.contains('revealed') && canCompleteTopic) onCompleteTopic();
             else if (card.classList.contains('revealed')) closeTablet();
             else openTablet();
         });
@@ -409,10 +400,68 @@ document.addEventListener('DOMContentLoaded', () => {
         return card;
     }
 
+    function createTopicSection(presentation, revealed, { allowCompletion = true } = {}) {
+        const { group, tablets } = presentation;
+        const section = document.createElement('section');
+        section.className = 'topic-section active-topic';
+        section.dataset.groupId = group.id;
+        section.setAttribute('aria-labelledby', `active-topic-heading-${group.id}`);
+
+        const heading = document.createElement('h1');
+        heading.id = `active-topic-heading-${group.id}`;
+        heading.className = 'topic-heading';
+        heading.textContent = group.topic;
+
+        const topicGrid = document.createElement('div');
+        topicGrid.className = 'tablet-grid';
+        topicGrid.setAttribute('aria-live', 'polite');
+
+        const completionActions = document.createElement('div');
+        completionActions.className = 'topic-completion-actions';
+        const groupSolveButton = document.createElement('button');
+        groupSolveButton.type = 'button';
+        groupSolveButton.className = 'solve-topic-button sampo-solve-button hidden';
+        groupSolveButton.setAttribute('aria-label', `Mark ${group.topic} as solved`);
+        const sampo = document.createElement('img');
+        sampo.src = '/images/sampo.png';
+        sampo.alt = '';
+        sampo.setAttribute('aria-hidden', 'true');
+        const solveLabel = document.createElement('span');
+        solveLabel.textContent = 'Mark topic as solved';
+        const solveFlavor = document.createElement('small');
+        solveFlavor.textContent = "There's no undo button.";
+        groupSolveButton.append(sampo, solveLabel, solveFlavor);
+        completionActions.appendChild(groupSolveButton);
+
+        const canCompleteSingleTopic = allowCompletion && tablets.length === 1;
+        const updateSolveVisibility = () => {
+            const anyRevealed = tablets.some((tablet) => loadRevealedTabletIds().has(tablet.id));
+            groupSolveButton.classList.toggle(
+                'hidden',
+                !allowCompletion || tablets.length <= 1 || !anyRevealed || loadSolvedGroupIds().has(group.id)
+            );
+        };
+        const completeTopic = () => celebrateCompletion(group.id);
+        const cards = tablets.map((tablet) => createTablet(
+            tablet,
+            revealed.has(tablet.id),
+            {
+                canCompleteTopic: canCompleteSingleTopic,
+                onCompleteTopic: completeTopic,
+                onRevealStateChange: updateSolveVisibility
+            }
+        ));
+        topicGrid.replaceChildren(...cards);
+        groupSolveButton.addEventListener('click', completeTopic);
+        section.append(heading, topicGrid, completionActions);
+        updateSolveVisibility();
+        return { section, topicGrid, cards };
+    }
+
     function hidePresentationViews() {
         stopLonglegCycle();
         waiting.classList.add('hidden');
-        activeSection.classList.add('hidden');
+        activeTopics.classList.add('hidden');
         solvedTopics.classList.add('hidden');
         errorState.classList.add('hidden');
         archiveView.classList.add('hidden');
@@ -439,42 +488,45 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderPresentation() {
         stopLayouts();
         hidePresentationViews();
-        grid.replaceChildren();
+        activeTopics.replaceChildren();
         solvedTopics.replaceChildren();
-        grid.classList.remove('masonry-ready');
-        grid.style.height = '';
-
-        const { group, tablets } = currentPresentation;
         const revealed = loadRevealedTabletIds();
         const solvedIds = loadSolvedGroupIds();
-        const currentSolved = Boolean(group && mode !== 'preview' && solvedIds.has(group.id));
         const layouts = [];
+        const visiblePresentations = currentPresentations.filter((presentation) => presentation.group);
+        const unsolvedPresentations = mode === 'preview'
+            ? visiblePresentations
+            : visiblePresentations.filter((presentation) => !solvedIds.has(presentation.group.id));
 
-        if (!group || (mode === 'active' && currentSolved)) {
+        if (mode === 'active' && unsolvedPresentations.length === 0) {
             waiting.classList.remove('hidden');
             document.title = 'Hamis Waits · Riddle Tablets';
-        } else if (currentSolved) {
-            document.title = `${group.topic} · Riddle Tablets`;
-        } else if (!currentSolved) {
-            document.title = `${group.topic} · Riddle Tablets`;
-            const canCompleteSingleTopic = mode !== 'preview' && tablets.length === 1;
-            const cards = tablets.map((tablet) => createTablet(
-                tablet,
-                revealed.has(tablet.id),
-                { canCompleteTopic: canCompleteSingleTopic }
+        } else if (unsolvedPresentations.length > 0) {
+            const rendered = unsolvedPresentations.map((presentation) => createTopicSection(
+                presentation,
+                revealed,
+                { allowCompletion: mode !== 'preview' }
             ));
-            activeHeading.textContent = group.topic;
-            grid.replaceChildren(...cards);
-            activeSection.classList.remove('hidden');
-            if (cards.length) layouts.push(installMasonry(grid, cards));
-            updateSolveVisibility();
+            activeTopics.replaceChildren(...rendered.map(({ section }) => section));
+            activeTopics.classList.remove('hidden');
+            activeTopics.classList.toggle('multiple-active-topics', rendered.length > 1);
+            rendered.forEach(({ topicGrid, cards }) => {
+                if (cards.length) layouts.push(installMasonry(topicGrid, cards));
+            });
+            document.title = mode === 'active' && unsolvedPresentations.length > 1
+                ? `${unsolvedPresentations.length} Active Topics · Riddle Tablets`
+                : `${unsolvedPresentations[0].group.topic} · Riddle Tablets`;
+        } else if (visiblePresentations.length > 0) {
+            document.title = `${visiblePresentations[0].group.topic} · Riddle Tablets`;
         }
 
         if (mode !== 'preview') {
             const byId = new Map(availablePresentations
                 .filter((presentation) => presentation.group)
                 .map((presentation) => [presentation.group.id, presentation]));
-            if (group) byId.set(group.id, currentPresentation);
+            currentPresentations.forEach((presentation) => {
+                if (presentation.group) byId.set(presentation.group.id, presentation);
+            });
             const solved = [...byId.values()].filter((presentation) => solvedIds.has(presentation.group.id));
             const rendered = solved.map((presentation) => createSolvedSection(presentation, revealed));
             solvedTopics.replaceChildren(...rendered.map(({ section }) => section));
@@ -518,40 +570,41 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function signature(presentation, presentations = availablePresentations) {
+    function signature(presentations, available = availablePresentations) {
+        const summarize = (presentation) => ({
+            group: presentation.group && [presentation.group.id, presentation.group.updatedAt, presentation.group.status],
+            tablets: (presentation.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position])
+        });
         return JSON.stringify({
-            group: presentation.group && [presentation.group.id, presentation.group.updatedAt],
-            tablets: (presentation.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position]),
-            available: presentations.map((item) => ({
-                group: item.group && [item.group.id, item.group.updatedAt],
-                tablets: (item.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position])
-            }))
+            current: presentations.map(summarize),
+            available: available.map(summarize)
         });
     }
 
     async function loadPresentation({ quiet = false } = {}) {
         const loadVersion = ++presentationLoadVersion;
         try {
-            let result;
+            let nextCurrentPresentations;
             let nextAvailablePresentations = [];
             if (mode === 'active') {
                 nextAvailablePresentations = await listPresentations();
-                result = nextAvailablePresentations.find((presentation) => presentation.group && presentation.group.status === 'active')
-                    || { group: null, tablets: [] };
+                nextCurrentPresentations = nextAvailablePresentations
+                    .filter((presentation) => presentation.group && presentation.group.status === 'active');
             } else {
-                result = mode === 'preview'
+                const result = mode === 'preview'
                     ? await getPreviewPresentation(routeId)
                     : await getTopicPresentation(routeId);
+                nextCurrentPresentations = [{
+                    group: result.group || null,
+                    tablets: Array.isArray(result.tablets) ? result.tablets : []
+                }];
             }
             if (loadVersion !== presentationLoadVersion) return;
-            const nextSignature = signature(result, nextAvailablePresentations);
+            const nextSignature = signature(nextCurrentPresentations, nextAvailablePresentations);
             if (quiet && nextSignature === currentSignature) return;
             availablePresentations = nextAvailablePresentations;
             currentSignature = nextSignature;
-            currentPresentation = {
-                group: result.group || null,
-                tablets: Array.isArray(result.tablets) ? result.tablets : []
-            };
+            currentPresentations = nextCurrentPresentations;
             renderPresentation();
         } catch {
             if (loadVersion !== presentationLoadVersion) return;
@@ -561,27 +614,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function refreshIfActiveChanged() {
-        if (waiting.classList.contains('hidden') || activeRefreshInFlight) return;
-        activeRefreshInFlight = true;
-        try {
-            const result = await getActivePresentation();
-            const nextId = result.group ? result.group.id : null;
-            const currentId = currentPresentation.group ? currentPresentation.group.id : null;
-            if (nextId !== currentId) await loadPresentation({ quiet: true });
-        } catch {}
-        finally {
-            activeRefreshInFlight = false;
-        }
-    }
-
-    solveButton.addEventListener('click', celebrateCompletion);
-
     if (mode === 'archive') renderArchive();
     else {
         loadPresentation();
         if (mode === 'active') {
-            window.setInterval(refreshIfActiveChanged, 3000);
             window.setInterval(() => loadPresentation({ quiet: true }), 10000);
         }
     }

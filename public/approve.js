@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const submissionLink = document.getElementById('group-submission-link');
     const toggleSubmissions = document.getElementById('toggle-group-submissions');
     const activateButton = document.getElementById('activate-group');
+    const activeGroupCount = document.getElementById('active-group-count');
     const toggleCompletion = document.getElementById('toggle-group-completion');
     const tabs = document.getElementById('moderation-tabs');
     const list = document.getElementById('moderation-list');
@@ -73,6 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderGroupList() {
+        const activeCount = groups.filter((group) => group.status === 'active' && !group.completedAt).length;
+        activeGroupCount.textContent = `${activeCount} active`;
         groupList.replaceChildren(...groups.map((group) => {
             const button = document.createElement('button');
             button.type = 'button';
@@ -122,10 +125,10 @@ document.addEventListener('DOMContentLoaded', () => {
         submissionLink.value = url;
         toggleSubmissions.textContent = group.status === 'open' ? 'Close submissions' : 'Reopen submissions';
         toggleSubmissions.disabled = group.status === 'active' || Boolean(group.completedAt);
-        activateButton.disabled = group.status === 'active' || Boolean(group.completedAt) || group.counts.approved === 0;
+        activateButton.disabled = Boolean(group.completedAt) || (group.status !== 'active' && group.counts.approved === 0);
         activateButton.textContent = group.completedAt
             ? 'Mark incomplete first'
-            : (group.status === 'active' ? 'Currently active' : 'Make active');
+            : (group.status === 'active' ? 'Deactivate' : 'Make active');
         toggleCompletion.textContent = group.completedAt ? 'Mark incomplete' : 'Mark complete';
     }
 
@@ -369,11 +372,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const group = selectedGroup();
         changeStatus(group.status === 'open' ? 'close' : 'open', null, group.status === 'open' ? 'Submissions closed.' : 'Submissions reopened.');
     });
-    activateButton.addEventListener('click', () => changeStatus(
-        'activate',
-        'Make this the active topic? The current active topic will no longer be active.',
-        'Topic is now active.'
-    ));
+    activateButton.addEventListener('click', () => {
+        const group = selectedGroup();
+        if (!group) return;
+        if (group.status === 'active') {
+            changeStatus(
+                'deactivate',
+                'Remove this topic from the live page? Its clues will remain ready to reactivate.',
+                'Topic removed from the live page.'
+            );
+            return;
+        }
+        const activeCount = groups.filter((candidate) => candidate.status === 'active' && !candidate.completedAt).length;
+        const alongside = activeCount === 0
+            ? 'It will be the only active topic.'
+            : `It will appear alongside ${activeCount} active topic${activeCount === 1 ? '' : 's'}.`;
+        changeStatus(
+            'activate',
+            `Add this topic to the live page? ${alongside}`,
+            'Topic added to the live page.'
+        );
+    });
     toggleCompletion.addEventListener('click', () => {
         const group = selectedGroup();
         if (!group) return;

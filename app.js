@@ -437,6 +437,7 @@ function createApp(options = {}) {
   app.post('/api/moderation/groups/:id/open', requireModeratorAccess, setGroupStatus('open'));
   app.post('/api/moderation/groups/:id/close', requireModeratorAccess, setGroupStatus('ready'));
   app.post('/api/moderation/groups/:id/activate', requireModeratorAccess, setGroupStatus('active'));
+  app.post('/api/moderation/groups/:id/deactivate', requireModeratorAccess, setGroupStatus('ready'));
   app.post('/api/moderation/groups/:id/archive', requireModeratorAccess, setGroupStatus('archived'));
 
   const setGroupCompletion = (completed) => async (req, res, next) => {
@@ -728,20 +729,21 @@ function createApp(options = {}) {
 
   app.get('/health', async (req, res, next) => {
     try {
-      const [tablets, pending, rejected, groupRecords, active] = await Promise.all([
+      const [tablets, pending, rejected, groupRecords] = await Promise.all([
         repository.list(),
         submissions.list('pending'),
         submissions.list('rejected'),
-        groups.list(),
-        groups.getActive()
+        groups.list()
       ]);
+      const activeCount = groupRecords.filter((group) => group.status === 'active' && !group.completedAt).length;
       res.json({
         status: 'ok',
         tablet_count: tablets.length,
         pending_count: pending.length,
         rejected_count: rejected.length,
         group_count: groupRecords.length,
-        active_group_configured: Boolean(active),
+        active_group_configured: activeCount > 0,
+        active_group_count: activeCount,
         moderator_password_configured: Boolean(config.moderatorPassword),
         create_password_configured: Boolean(config.moderatorPassword),
         shared_storage: Boolean(resolveStorageCredentials())

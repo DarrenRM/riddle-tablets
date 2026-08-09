@@ -9,7 +9,7 @@
     <link rel="preload" href="/audio/noita-ancient-01.mp3?v=1" as="audio" type="audio/mpeg">
     <link rel="preload" href="/audio/noita-ancient-02.mp3?v=1" as="audio" type="audio/mpeg">
     <link rel="preload" href="/audio/noita-tablet-open-orb.mp3?v=1" as="audio" type="audio/mpeg">
-    <link rel="stylesheet" href="/style.css?v=32">
+    <link rel="stylesheet" href="/style.css?v=33">
 </head>
 <body class="archive-page">
     <main class="archive-container">
@@ -21,17 +21,7 @@
             <p>No new topic has awakened.</p>
         </section>
 
-        <section id="active-topic" class="topic-section hidden" aria-labelledby="active-topic-heading">
-            <h1 id="active-topic-heading" class="topic-heading"></h1>
-            <div id="tablet-grid" class="tablet-grid" aria-live="polite"></div>
-            <div class="topic-completion-actions">
-                <button id="solve-topic-button" class="solve-topic-button sampo-solve-button hidden" type="button" aria-describedby="solve-topic-flavor">
-                    <img src="/images/sampo.png" alt="" aria-hidden="true">
-                    <span>Mark topic as solved</span>
-                    <small id="solve-topic-flavor">There's no undo button.</small>
-                </button>
-            </div>
-        </section>
+        <div id="active-topics" class="active-topics hidden"></div>
 
         <div id="solved-topics" class="solved-topics hidden" aria-live="polite"></div>
 
@@ -64,6 +54,6 @@
     <audio id="tablet-open-sound" preload="auto" aria-hidden="true">
         <source src="/audio/noita-tablet-open-orb.mp3?v=1" type="audio/mpeg">
     </audio>
-    <script type="module" src="/gallery.js?v=27"></script>
+    <script type="module" src="/gallery.js?v=28"></script>
 </body>
 </html>

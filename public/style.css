@@ -1021,6 +1021,18 @@ textarea {
     width: 100%;
 }
 
+.active-topics {
+    display: grid;
+    width: 100%;
+    gap: 0;
+}
+
+.active-topics.multiple-active-topics .active-topic + .active-topic {
+    margin-top: 4.5rem;
+    padding-top: 3.25rem;
+    border-top: 1px solid rgba(168, 102, 255, 0.24);
+}
+
 .topic-heading {
     margin: 0 0 2rem;
     color: #8e8999;
@@ -1338,12 +1350,28 @@ textarea {
 }
 
 .group-sidebar-label {
-    margin: 0.2rem 0.35rem 0.75rem;
+    margin: 0;
     color: #625d6d;
     font-family: 'NoitaPixel', monospace;
     font-size: 0.68rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
+}
+
+.group-sidebar-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin: 0.2rem 0.35rem 0.75rem;
+}
+
+.active-group-count {
+    color: var(--green);
+    font-family: 'NoitaPixel', monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
 }
 
 .group-list {
