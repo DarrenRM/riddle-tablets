@@ -327,7 +327,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await racePage.addInitScript(() => {
       const nativeSetInterval = window.setInterval.bind(window);
       window.setInterval = (callback, delay, ...args) => {
-        if (delay === 30000) return window.setTimeout(callback, 75, ...args);
+        if (delay === 10000) return window.setTimeout(callback, 75, ...args);
         return nativeSetInterval(callback, delay, ...args);
       };
     });

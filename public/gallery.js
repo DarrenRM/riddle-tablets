@@ -582,7 +582,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loadPresentation();
         if (mode === 'active') {
             window.setInterval(refreshIfActiveChanged, 3000);
-            window.setInterval(() => loadPresentation({ quiet: true }), 30000);
+            window.setInterval(() => loadPresentation({ quiet: true }), 10000);
         }
     }
 });
