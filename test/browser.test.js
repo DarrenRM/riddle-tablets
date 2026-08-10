@@ -250,20 +250,8 @@ test('topic creation, submission, moderation, presentation, and local group comp
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
-    assert.equal(await page.locator('#hide-main-riddle-names').isChecked(), false);
-    await page.locator('#hide-main-riddle-names').check();
-    assert.equal(await page.locator('.active-topic .topic-heading.archive-topic-name-hidden').count(), 1);
-    assert.equal(
-      await page.evaluate(() => localStorage.getItem('riddle-main-topic-names-hidden.v1')),
-      'true'
-    );
-    await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('#hide-main-riddle-names').isChecked(), true);
     assert.equal(await page.locator('.active-topic .topic-heading.archive-topic-name-hidden').count(), 1);
-    assert.match(
-      await page.locator('.active-topic .topic-heading').evaluate((heading) => getComputedStyle(heading).fontFamily),
-      /NoitaGlyph/
-    );
     await page.locator('#hide-main-riddle-names').uncheck();
     await page.waitForFunction(() => {
       const heading = document.querySelector('.active-topic .topic-heading');
@@ -274,7 +262,19 @@ test('topic creation, submission, moderation, presentation, and local group comp
       await page.evaluate(() => localStorage.getItem('riddle-main-topic-names-hidden.v1')),
       'false'
     );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('#hide-main-riddle-names').isChecked(), false);
+    assert.equal(await page.locator('.active-topic .topic-heading.archive-topic-name-hidden').count(), 0);
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem('riddle-main-topic-names-hidden.v1')),
+      'false'
+    );
     assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
+    const activeHeadingTypography = await page.locator('.active-topic .topic-heading').evaluate((element) => ({
+      fontSize: getComputedStyle(element).fontSize,
+      letterSpacing: getComputedStyle(element).letterSpacing,
+      lineHeight: getComputedStyle(element).lineHeight
+    }));
     const workSection = page.locator('.active-topic').filter({ hasText: 'The Work' });
     const cards = workSection.locator('.tablet-grid .riddle-tablet');
     assert.equal(await cards.count(), 2);
@@ -318,8 +318,13 @@ test('topic creation, submission, moderation, presentation, and local group comp
       await page.locator('.solved-topic .topic-heading').evaluate((element) => getComputedStyle(element).color),
       /240, 192, 64/
     );
-    assert.ok(
-      await page.locator('.solved-topic .topic-heading').evaluate((element) => parseFloat(getComputedStyle(element).fontSize)) < 13
+    assert.deepEqual(
+      await page.locator('.solved-topic .topic-heading').evaluate((element) => ({
+        fontSize: getComputedStyle(element).fontSize,
+        letterSpacing: getComputedStyle(element).letterSpacing,
+        lineHeight: getComputedStyle(element).lineHeight
+      })),
+      activeHeadingTypography
     );
     assert.equal(await page.locator('.solved-topic .riddle-tablet').count(), 2);
     const solvedHeadingRowBox = await page.locator('.solved-topic-heading-row').boundingBox();

@@ -1243,8 +1243,6 @@ textarea {
 .solved-topic .topic-heading {
     margin: 0;
     color: var(--gold);
-    font-size: clamp(0.58rem, 1vw, 0.72rem);
-    letter-spacing: 0.1em;
 }
 
 .solved-topic-heading-row {

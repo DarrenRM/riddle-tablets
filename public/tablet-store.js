@@ -95,9 +95,10 @@ export function setGroupSolved(id, isSolved) {
 
 export function loadMainRiddleNamesHidden() {
     try {
-        return localStorage.getItem(MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY) === 'true';
+        const saved = localStorage.getItem(MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY);
+        return saved === null ? true : saved === 'true';
     } catch {
-        return false;
+        return true;
     }
 }
 
