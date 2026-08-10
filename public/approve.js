@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const groupList = document.getElementById('group-list');
     const groupListEmpty = document.getElementById('group-list-empty');
-    const workspace = document.getElementById('group-workspace');
+    const workspaceShell = document.getElementById('group-workspace-shell');
     const workspaceEmpty = document.getElementById('group-empty');
     const topicInput = document.getElementById('group-topic-input');
     const submissionLink = document.getElementById('group-submission-link');
@@ -22,6 +22,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const newTopic = document.getElementById('new-group-topic');
     const createdTopic = document.getElementById('created-group-topic');
     const createdLink = document.getElementById('created-group-link');
+    const deleteButton = document.getElementById('delete-group');
+    const deleteDialog = document.getElementById('delete-group-dialog');
+    const deleteForm = document.getElementById('delete-group-form');
+    const deleteTopic = document.getElementById('delete-group-topic');
+    const deleteWarning = document.getElementById('delete-group-warning');
+    const deleteCounts = document.getElementById('delete-group-counts');
+    const deleteConfirmation = document.getElementById('delete-group-confirmation');
+    const deleteError = document.getElementById('delete-group-error');
+    const confirmDelete = document.getElementById('confirm-delete-group');
 
     let groups = [];
     let selectedGroupId = null;
@@ -64,9 +73,16 @@ document.addEventListener('DOMContentLoaded', () => {
             document.execCommand('copy');
             helper.remove();
         }
-        const original = button.textContent;
-        button.textContent = 'Copied';
-        window.setTimeout(() => { button.textContent = original; }, 1500);
+        const originalLabel = button.getAttribute('aria-label') || 'Copy link';
+        button.setAttribute('aria-label', 'Copied');
+        button.title = 'Copied';
+        button.classList.add('copied');
+        showToast('Submission link copied.');
+        window.setTimeout(() => {
+            button.setAttribute('aria-label', originalLabel);
+            button.title = originalLabel;
+            button.classList.remove('copied');
+        }, 1500);
     }
 
     function selectedGroup() {
@@ -113,16 +129,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderGroupHeader() {
         const group = selectedGroup();
         if (!group) {
-            workspace.classList.add('hidden');
+            workspaceShell.classList.add('hidden');
             workspaceEmpty.classList.remove('hidden');
             return;
         }
-        workspace.classList.remove('hidden');
+        workspaceShell.classList.remove('hidden');
         workspaceEmpty.classList.add('hidden');
         topicInput.value = group.topic;
 
         const url = submissionUrl(group);
-        submissionLink.value = url;
+        submissionLink.textContent = url;
+        submissionLink.title = url;
         toggleSubmissions.textContent = group.status === 'open' ? 'Close submissions' : 'Reopen submissions';
         toggleSubmissions.disabled = group.status === 'active' || Boolean(group.completedAt);
         activateButton.disabled = Boolean(group.completedAt) || (group.status !== 'active' && group.counts.approved === 0);
@@ -340,7 +357,8 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedGroupId = result.group.id;
             const url = submissionUrl(result.group);
             createdTopic.textContent = result.group.topic;
-            createdLink.value = url;
+            createdLink.textContent = url;
+            createdLink.title = url;
             createForm.classList.add('hidden');
             createSuccess.classList.remove('hidden');
             await refreshAll();
@@ -351,8 +369,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    document.getElementById('copy-created-group-link').addEventListener('click', (event) => copyText(createdLink.value, event.currentTarget));
-    document.getElementById('copy-group-link').addEventListener('click', (event) => copyText(submissionLink.value, event.currentTarget));
+    document.getElementById('copy-created-group-link').addEventListener('click', (event) => copyText(createdLink.textContent, event.currentTarget));
+    document.getElementById('copy-group-link').addEventListener('click', (event) => copyText(submissionLink.textContent, event.currentTarget));
 
     document.getElementById('save-group-topic').addEventListener('click', async () => {
         try {
@@ -398,6 +416,70 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!group) return;
         const completed = !group.completedAt;
         changeStatus(completed ? 'complete' : 'incomplete', null, completed ? 'Topic marked complete.' : 'Topic marked incomplete.');
+    });
+
+    function openDeleteDialog() {
+        const group = selectedGroup();
+        if (!group) return;
+
+        const isActive = group.status === 'active' && !group.completedAt;
+        deleteDialog.dataset.groupId = group.id;
+        deleteDialog.dataset.topic = group.topic;
+        deleteTopic.textContent = `“${group.topic}”`;
+        deleteCounts.replaceChildren(...[
+            `${group.counts.approved} approved clue${group.counts.approved === 1 ? '' : 's'}`,
+            `${group.counts.pending} pending clue${group.counts.pending === 1 ? '' : 's'}`,
+            `${group.counts.rejected} rejected clue${group.counts.rejected === 1 ? '' : 's'}`
+        ].map((label) => {
+            const item = document.createElement('li');
+            item.textContent = label;
+            return item;
+        }));
+        deleteWarning.textContent = isActive
+            ? 'This topic is currently live. Deactivate it before it can be deleted.'
+            : 'You are about to permanently delete this topic and every clue attached to it.';
+        deleteConfirmation.value = '';
+        deleteConfirmation.disabled = isActive;
+        deleteError.textContent = isActive ? 'Deletion is blocked while a topic is active.' : '';
+        confirmDelete.disabled = true;
+        deleteDialog.showModal();
+        (isActive ? document.getElementById('cancel-delete-group') : deleteConfirmation).focus();
+    }
+
+    function closeDeleteDialog() {
+        deleteDialog.close();
+    }
+
+    deleteButton.addEventListener('click', openDeleteDialog);
+    document.getElementById('close-delete-group-dialog').addEventListener('click', closeDeleteDialog);
+    document.getElementById('cancel-delete-group').addEventListener('click', closeDeleteDialog);
+    deleteConfirmation.addEventListener('input', () => {
+        confirmDelete.disabled = deleteConfirmation.disabled || deleteConfirmation.value !== 'DELETE';
+    });
+    deleteForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (deleteConfirmation.value !== 'DELETE') return;
+
+        const groupId = deleteDialog.dataset.groupId;
+        const topic = deleteDialog.dataset.topic;
+        confirmDelete.disabled = true;
+        deleteConfirmation.disabled = true;
+        deleteError.textContent = '';
+        try {
+            await request(`/api/moderation/groups/${groupId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ confirmation: 'DELETE', topic })
+            });
+            closeDeleteDialog();
+            selectedGroupId = null;
+            showToast('Topic permanently deleted.');
+            await refreshAll();
+        } catch (error) {
+            deleteError.textContent = error.message;
+            deleteConfirmation.disabled = false;
+            confirmDelete.disabled = deleteConfirmation.value !== 'DELETE';
+        }
     });
 
     document.getElementById('import-legacy-button').addEventListener('click', async () => {

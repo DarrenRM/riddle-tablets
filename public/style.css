@@ -1330,7 +1330,7 @@ textarea {
 
 .group-moderation-layout {
     display: grid;
-    grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
     gap: 1.25rem;
     align-items: start;
 }
@@ -1405,7 +1405,7 @@ textarea {
 
 .group-list-item strong {
     font-family: 'NoitaPixel', monospace;
-    font-size: 0.74rem;
+    font-size: 0.86rem;
     font-weight: normal;
     overflow-wrap: anywhere;
 }
@@ -1421,14 +1421,19 @@ textarea {
 }
 
 .group-mini-status {
+    display: inline-flex;
     flex: 0 0 auto;
-    padding: 0.2rem 0.42rem;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.55rem;
+    padding: 0.12rem 0.48rem 0;
     border: 1px solid #46404f;
     border-radius: 999px;
     color: #817c88;
     font-family: 'NoitaPixel', monospace;
     font-size: 0.57rem;
     letter-spacing: 0.05em;
+    line-height: 1;
     text-transform: uppercase;
 }
 
@@ -1437,6 +1442,10 @@ textarea {
 
 .group-workspace {
     padding: 1.2rem;
+}
+
+.group-workspace-shell {
+    min-width: 0;
 }
 
 .group-workspace-empty {
@@ -1472,15 +1481,14 @@ textarea {
 }
 
 .group-topic-editor > label,
-.group-link-panel > label {
+.group-copy-label {
     color: #6e6877;
     font-size: 0.68rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
 
-.group-topic-editor input,
-.group-link-row input {
+.group-topic-editor input {
     padding: 0.72rem;
 }
 
@@ -1494,14 +1502,84 @@ textarea {
     gap: 0.35rem;
 }
 
-.group-link-row input {
-    flex: 1 1 360px;
+.group-link-value {
+    display: block;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: calc(100% - 3.35rem);
+    color: #8d8797;
     font-family: Consolas, monospace;
     font-size: 0.8rem;
+    overflow-wrap: anywhere;
+    user-select: all;
 }
 
-.group-controls {
+.group-link-value:focus {
+    border-radius: 2px;
+    outline: 1px solid rgba(168, 102, 255, 0.36);
+    outline-offset: 3px;
+}
+
+.group-link-row {
+    align-items: flex-start;
+    flex-wrap: nowrap;
     justify-content: flex-start;
+}
+
+.group-controls .icon-button,
+.group-link-row .icon-button {
+    display: inline-grid;
+    flex: 0 0 auto;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0.55rem;
+    place-items: center;
+}
+
+.icon-button svg {
+    width: 1.55rem;
+    height: 1.55rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.7;
+}
+
+.icon-button.copied {
+    border-color: var(--green);
+    color: var(--green);
+}
+
+.group-link-row .copy-icon-button {
+    width: 1.55rem;
+    height: 1.55rem;
+    margin-top: -0.08rem;
+    padding: 0.18rem;
+    border: 0;
+    background: transparent;
+    color: #8d8797;
+}
+
+.group-link-row .copy-icon-button svg {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+.group-link-row .copy-icon-button:hover,
+.group-link-row .copy-icon-button:focus-visible {
+    background: transparent;
+    color: var(--purple);
+}
+
+.group-link-row .copy-icon-button:focus-visible {
+    border-radius: 2px;
+    outline: 1px solid var(--purple);
+    outline-offset: 2px;
+}
+
+.group-link-row .copy-icon-button.copied {
+    color: var(--green);
 }
 
 .moderation-actions .quiet-button {
@@ -1590,6 +1668,35 @@ textarea {
     color: #d37a9d;
 }
 
+.delete-group-dialog {
+    border-color: rgba(184, 71, 98, 0.72);
+}
+
+.delete-group-dialog h2 {
+    color: #db8298;
+}
+
+.delete-group-warning {
+    margin: 1rem 0;
+    padding: 0.85rem 1rem;
+    border: 1px solid rgba(184, 71, 98, 0.45);
+    border-radius: 5px;
+    background: rgba(70, 26, 38, 0.42);
+    color: #dda0af;
+}
+
+.delete-group-counts {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0 0 1rem;
+    padding-left: 1.25rem;
+    color: #aaa4b1;
+}
+
+.delete-group-dialog .form-field strong {
+    color: #db8298;
+}
+
 @media (max-width: 850px) {
     .group-moderation-layout { grid-template-columns: 1fr; }
     .group-sidebar { position: static; }
@@ -1602,9 +1709,9 @@ textarea {
     .approve-header-actions { align-items: flex-start; }
     .group-title-row { align-items: stretch; flex-direction: column; }
     .group-title-row > * { width: 100%; text-align: center; }
-    .group-link-row > *,
     .group-controls > *,
     .dialog-actions-wide > * { width: 100%; text-align: center; }
+    .group-controls .icon-button { width: 2.75rem; margin-left: auto; }
     .legacy-banner { align-items: stretch; flex-direction: column; }
 }
 

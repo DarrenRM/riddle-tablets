@@ -5,18 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Riddle Review</title>
     <link rel="icon" type="image/png" href="/images/emerald_tablet.png">
-    <link rel="stylesheet" href="/style.css?v=33">
+    <link rel="stylesheet" href="/style.css?v=39">
 </head>
 <body class="approve-page">
     <div class="approve-container group-approve-container">
         <header class="approve-header">
             <div>
                 <p class="eyebrow">The moderation chamber</p>
-                <h1>Topic Groups</h1>
+                <h1>Riddle Groups</h1>
             </div>
             <div class="approve-header-actions">
                 <a href="/" class="text-link">View tablets</a>
-                <button id="new-group-button" type="button">New topic</button>
+                <button id="new-group-button" type="button">New Riddle</button>
             </div>
         </header>
 
@@ -45,39 +45,46 @@
                 <p>Create or select a topic group to review its clues.</p>
             </section>
 
-            <section id="group-workspace" class="group-workspace hidden">
-                <header class="group-detail-header">
-                    <div class="group-topic-editor">
-                        <label for="group-topic-input">Topic</label>
-                        <div class="group-title-row">
-                            <input id="group-topic-input" type="text" maxlength="120" required>
-                            <button id="save-group-topic" type="button">Save topic</button>
+            <div id="group-workspace-shell" class="group-workspace-shell hidden">
+                <section id="group-workspace" class="group-workspace">
+                    <header class="group-detail-header">
+                        <div class="group-topic-editor">
+                            <label for="group-topic-input">Topic</label>
+                            <div class="group-title-row">
+                                <input id="group-topic-input" type="text" maxlength="120" required>
+                                <button id="save-group-topic" type="button">Save topic</button>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="group-link-panel">
-                        <label for="group-submission-link">Submission link</label>
-                        <div class="group-link-row">
-                            <input id="group-submission-link" type="text" readonly>
-                            <button id="copy-group-link" type="button">Copy link</button>
+                        <div class="group-link-panel">
+                            <span class="group-copy-label">Submission link</span>
+                            <div class="group-link-row">
+                                <code id="group-submission-link" class="group-link-value" tabindex="0"></code>
+                                <button id="copy-group-link" type="button" class="icon-button copy-icon-button" aria-label="Copy submission link" title="Copy submission link">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2m-9-9h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3Z"/></svg>
+                                </button>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="group-controls">
-                        <button id="toggle-group-submissions" type="button"></button>
-                        <button id="activate-group" type="button" class="approve-button">Make active</button>
-                        <button id="toggle-group-completion" type="button" class="quiet-button"></button>
-                    </div>
-                </header>
+                        <div class="group-controls" aria-label="Topic actions">
+                            <button id="toggle-group-submissions" type="button"></button>
+                            <button id="activate-group" type="button" class="approve-button">Make active</button>
+                            <button id="toggle-group-completion" type="button" class="quiet-button"></button>
+                            <button id="delete-group" type="button" class="delete-button icon-button" aria-label="Delete topic" title="Delete topic">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m4 4v6m4-6v6"/></svg>
+                            </button>
+                        </div>
+                    </header>
 
-                <nav id="moderation-tabs" class="moderation-tabs" aria-label="Moderation queues">
-                    <button type="button" class="active" data-status="pending">Pending <span data-count="pending">0</span></button>
-                    <button type="button" data-status="approved">Approved <span data-count="approved">0</span></button>
-                    <button type="button" data-status="rejected">Rejected <span data-count="rejected">0</span></button>
-                </nav>
-                <p id="moderation-status" class="moderation-status" role="status" aria-live="polite"></p>
-                <div id="moderation-list" class="moderation-list"></div>
-            </section>
+                    <nav id="moderation-tabs" class="moderation-tabs" aria-label="Moderation queues">
+                        <button type="button" class="active" data-status="pending">Pending <span data-count="pending">0</span></button>
+                        <button type="button" data-status="approved">Approved <span data-count="approved">0</span></button>
+                        <button type="button" data-status="rejected">Rejected <span data-count="rejected">0</span></button>
+                    </nav>
+                    <p id="moderation-status" class="moderation-status" role="status" aria-live="polite"></p>
+                    <div id="moderation-list" class="moderation-list"></div>
+                </section>
+            </div>
         </main>
     </div>
 
@@ -101,17 +108,41 @@
             <p class="eyebrow">Topic created</p>
             <h2 id="created-group-topic"></h2>
             <p class="dialog-copy">Post this link in the matching Discord thread.</p>
-            <label class="form-field" for="created-group-link">
-                <span>Submission link</span>
-                <input id="created-group-link" type="text" readonly>
-            </label>
+            <div class="group-link-panel">
+                <span class="group-copy-label">Submission link</span>
+                <div class="group-link-row">
+                    <code id="created-group-link" class="group-link-value" tabindex="0"></code>
+                    <button id="copy-created-group-link" type="button" class="icon-button copy-icon-button" aria-label="Copy submission link" title="Copy submission link">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2m-9-9h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3Z"/></svg>
+                    </button>
+                </div>
+            </div>
             <div class="dialog-actions dialog-actions-wide">
-                <button id="copy-created-group-link" type="button">Copy link</button>
                 <button type="button" data-close-dialog>Done</button>
             </div>
         </section>
     </dialog>
 
-    <script type="module" src="/approve.js?v=12"></script>
+    <dialog id="delete-group-dialog" class="group-dialog delete-group-dialog">
+        <button id="close-delete-group-dialog" class="dialog-close" type="button" aria-label="Close">&times;</button>
+        <form id="delete-group-form">
+            <p class="eyebrow">Permanent action</p>
+            <h2>Delete <span id="delete-group-topic"></span>?</h2>
+            <p id="delete-group-warning" class="delete-group-warning"></p>
+            <ul id="delete-group-counts" class="delete-group-counts"></ul>
+            <p class="dialog-copy">This also invalidates its submission link and removes it from the live page, Past Topics, and any solved-topic view. This cannot be undone.</p>
+            <label class="form-field" for="delete-group-confirmation">
+                <span>Type <strong>DELETE</strong> to confirm</span>
+                <input id="delete-group-confirmation" type="text" autocomplete="off" spellcheck="false">
+            </label>
+            <p id="delete-group-error" class="dialog-error" role="alert"></p>
+            <div class="dialog-actions">
+                <button id="cancel-delete-group" type="button">Cancel</button>
+                <button id="confirm-delete-group" type="submit" class="delete-button" disabled>Delete permanently</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script type="module" src="/approve.js?v=14"></script>
 </body>
 </html>

@@ -23,10 +23,11 @@ test('topic creation, submission, moderation, presentation, and local group comp
 
   const groupRepository = new MemoryGroupRepository();
   const tabletRepository = new MemoryTabletRepository();
+  const submissionRepository = new MemorySubmissionRepository();
   const app = createApp({
     groupRepository,
     tabletRepository,
-    submissionRepository: new MemorySubmissionRepository(),
+    submissionRepository,
     submissionLimiter: new RateLimiter({ max: 20, windowMs: 60_000 }),
     config: { moderatorPassword: 'browser-password', logRequests: false },
     logger: { log() {}, error() {} }
@@ -89,7 +90,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('#approve-password').fill('browser-password');
     await page.getByRole('button', { name: 'Enter' }).click();
     await page.locator('#new-group-button').waitFor();
-    assert.equal(await page.locator('h1').textContent(), 'Topic Groups');
+    assert.equal(await page.locator('h1').textContent(), 'Riddle Groups');
 
     await page.locator('#new-group-button').click();
     await page.locator('#create-group-dialog').waitFor({ state: 'visible' });
@@ -99,16 +100,49 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('#create-group-success').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#created-group-topic').textContent(), 'The Work');
     assert.equal(await page.locator('#open-created-group-form').count(), 0);
-    const submissionUrl = await page.locator('#created-group-link').inputValue();
+    const submissionUrl = await page.locator('#created-group-link').textContent();
     assert.match(submissionUrl, new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/submit/[A-Za-z0-9_-]+$`));
     await page.locator('#create-group-success').getByRole('button', { name: 'Done' }).click();
     assert.equal(await page.locator('.group-list-item').count(), 1);
+    const [sidebarBox, topicNameSize] = await Promise.all([
+      page.locator('.group-sidebar').boundingBox(),
+      page.locator('.group-list-item strong').evaluate((element) => parseFloat(getComputedStyle(element).fontSize))
+    ]);
+    assert.ok(sidebarBox.width >= 360);
+    assert.ok(topicNameSize >= 13);
     const topicControlBoxes = await Promise.all([
       page.locator('#group-topic-input').boundingBox(),
       page.locator('#save-group-topic').boundingBox()
     ]);
     const topicControlCenters = topicControlBoxes.map((box) => box.y + (box.height / 2));
     assert.ok(Math.max(...topicControlCenters) - Math.min(...topicControlCenters) < 1);
+    assert.equal(await page.locator('#group-submission-link').evaluate((element) => element.tagName), 'CODE');
+    assert.equal(await page.locator('#group-submission-link').textContent(), submissionUrl);
+    const [controlsBox, linkBox] = await Promise.all([
+      page.locator('.group-controls').boundingBox(),
+      page.locator('#group-workspace .group-link-panel').boundingBox()
+    ]);
+    assert.ok(controlsBox.y >= linkBox.y + linkBox.height);
+    assert.equal(await page.locator('.group-link-panel input').count(), 0);
+    assert.equal(await page.locator('#delete-group').getAttribute('aria-label'), 'Delete topic');
+    assert.equal(await page.locator('#delete-group svg').count(), 1);
+    const [linkValueBox, copyButtonBox, copyIconBox, deleteIconBox] = await Promise.all([
+      page.locator('#group-submission-link').boundingBox(),
+      page.locator('#copy-group-link').boundingBox(),
+      page.locator('#copy-group-link svg').boundingBox(),
+      page.locator('#delete-group svg').boundingBox()
+    ]);
+    assert.ok(copyButtonBox.x - (linkValueBox.x + linkValueBox.width) <= 12);
+    assert.ok(copyIconBox.width >= 16 && copyIconBox.height >= 16);
+    assert.equal(
+      await page.locator('#copy-group-link').evaluate((element) => getComputedStyle(element).borderTopWidth),
+      '0px'
+    );
+    assert.match(
+      await page.locator('#copy-group-link').evaluate((element) => getComputedStyle(element).backgroundColor),
+      /rgba\(0, 0, 0, 0\)/
+    );
+    assert.ok(deleteIconBox.width >= 20 && deleteIconBox.height >= 20);
 
     await page.goto(submissionUrl, { waitUntil: 'domcontentloaded' });
     await page.locator('#submission-form').waitFor({ state: 'visible' });
@@ -137,9 +171,10 @@ test('topic creation, submission, moderation, presentation, and local group comp
 
     await page.goto(`${origin}/approve`, { waitUntil: 'domcontentloaded' });
     await page.locator('#group-workspace').waitFor({ state: 'visible' });
-    for (const selector of ['#preview-group', '#delete-group', '#open-group-form', '#reset-group-link', '#group-status-badge']) {
+    for (const selector of ['#preview-group', '#open-group-form', '#reset-group-link', '#group-status-badge']) {
       assert.equal(await page.locator(selector).count(), 0);
     }
+    assert.equal(await page.locator('#delete-group').count(), 1);
     assert.match(await page.getByRole('button', { name: /Pending/ }).textContent(), /2/);
     assert.equal(await page.locator('.moderation-row').count(), 2);
 
@@ -173,6 +208,12 @@ test('topic creation, submission, moderation, presentation, and local group comp
     });
     await page.locator('#activate-group').click();
     await page.waitForFunction(() => document.querySelector('#activate-group').textContent === 'Deactivate');
+    await page.locator('#delete-group').click();
+    await page.locator('#delete-group-dialog').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#delete-group-warning').textContent(), /currently live/i);
+    assert.equal(await page.locator('#delete-group-confirmation').isDisabled(), true);
+    assert.equal(await page.locator('#confirm-delete-group').isDisabled(), true);
+    await page.locator('#cancel-delete-group').click();
     await waitingPage.locator('.active-topic .topic-heading').waitFor({ state: 'visible', timeout: 12000 });
     assert.equal(await waitingPage.locator('.active-topic .topic-heading').textContent(), 'The Work');
     await waitingPage.close();
@@ -353,6 +394,43 @@ test('topic creation, submission, moderation, presentation, and local group comp
     );
     await page.locator('.topic-archive-card').filter({ hasText: 'The Work' }).click();
     assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+
+    const deleteGroup = await groupRepository.create({ topic: 'Delete Me' });
+    await tabletRepository.save({
+      groupId: deleteGroup.id,
+      topic: deleteGroup.topic,
+      author: 'Approved Scribe',
+      riddle: 'An approved clue.',
+      position: 0
+    });
+    await submissionRepository.create({
+      groupId: deleteGroup.id,
+      topic: deleteGroup.topic,
+      author: 'Pending Scribe',
+      riddle: 'A pending clue.',
+      status: 'pending'
+    });
+    await page.goto(`${origin}/approve`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.group-list-item').filter({ hasText: 'Delete Me' }).click();
+    await page.locator('#delete-group').click();
+    await page.locator('#delete-group-dialog').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#delete-group-topic').textContent(), /Delete Me/);
+    assert.deepEqual(await page.locator('#delete-group-counts li').allTextContents(), [
+      '1 approved clue',
+      '1 pending clue',
+      '0 rejected clues'
+    ]);
+    assert.equal(await page.locator('#confirm-delete-group').isDisabled(), true);
+    await page.locator('#delete-group-confirmation').fill('delete');
+    assert.equal(await page.locator('#confirm-delete-group').isDisabled(), true);
+    await page.locator('#delete-group-confirmation').fill('DELETE');
+    assert.equal(await page.locator('#confirm-delete-group').isDisabled(), false);
+    await page.locator('#confirm-delete-group').click();
+    await page.locator('#delete-group-dialog').waitFor({ state: 'hidden' });
+    await page.waitForFunction(() => ![...document.querySelectorAll('.group-list-item')].some((item) => item.textContent.includes('Delete Me')));
+    assert.equal(await groupRepository.get(deleteGroup.id), null);
+    assert.deepEqual(await tabletRepository.list(deleteGroup.id), []);
+    assert.deepEqual(await submissionRepository.list(null, deleteGroup.id), []);
 
     const racePage = await context.newPage();
     await racePage.addInitScript(() => {

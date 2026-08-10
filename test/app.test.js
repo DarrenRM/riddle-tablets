@@ -272,7 +272,16 @@ test('moderators manage group status, clue order, rejection, and unapproval', as
   assert.equal((await request(app, 'DELETE', `/api/moderation/submissions/${secondId}`, undefined, headers)).status, 204);
 
   assert.equal((await request(app, 'DELETE', `/api/moderation/groups/${firstGroup.id}`)).status, 401);
-  assert.equal((await request(app, 'DELETE', `/api/moderation/groups/${firstGroup.id}`, undefined, headers)).status, 204);
+  assert.equal((await request(app, 'DELETE', `/api/moderation/groups/${secondGroup.id}`, {
+    confirmation: 'DELETE', topic: secondGroup.topic
+  }, headers)).status, 409);
+  assert.equal((await request(app, 'DELETE', `/api/moderation/groups/${firstGroup.id}`, undefined, headers)).status, 409);
+  assert.equal((await request(app, 'DELETE', `/api/moderation/groups/${firstGroup.id}`, {
+    confirmation: 'DELETE', topic: 'Stale Topic Name'
+  }, headers)).status, 409);
+  assert.equal((await request(app, 'DELETE', `/api/moderation/groups/${firstGroup.id}`, {
+    confirmation: 'DELETE', topic: firstGroup.topic
+  }, headers)).status, 204);
   assert.deepEqual(await app.locals.tabletRepository.list(firstGroup.id), []);
   assert.deepEqual(await app.locals.submissionRepository.list(null, firstGroup.id), []);
   assert.equal((await request(app, 'GET', `/api/moderation/groups/${firstGroup.id}/queue`, undefined, headers)).status, 404);

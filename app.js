@@ -456,6 +456,12 @@ function createApp(options = {}) {
     try {
       const group = await groups.get(req.params.id);
       if (!group) throw httpError('record_not_found', 'That topic no longer exists.', 404);
+      if (group.status === 'active' && !group.completedAt) {
+        throw httpError('group_conflict', 'Deactivate this topic before deleting it.', 409);
+      }
+      if (!req.body || req.body.confirmation !== 'DELETE' || req.body.topic !== group.topic) {
+        throw httpError('group_conflict', 'Deletion confirmation did not match the current topic.', 409);
+      }
       const [tablets, groupSubmissions] = await Promise.all([
         repository.list(group.id),
         submissions.list(null, group.id)
