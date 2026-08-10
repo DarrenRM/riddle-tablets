@@ -1123,16 +1123,6 @@ textarea {
     transform: rotate(8deg) scale(1.06);
 }
 
-.sampo-solve-button small {
-    max-width: 12rem;
-    color: #a69b80;
-    font-family: Georgia, serif;
-    font-size: 0.72rem;
-    font-style: italic;
-    line-height: 1.25;
-    text-align: center;
-}
-
 .solved-topic {
     margin-top: 4rem;
     padding-top: 2.2rem;
@@ -1140,10 +1130,101 @@ textarea {
 }
 
 .solved-topic .topic-heading {
-    margin-bottom: 1.5rem;
+    margin: 0;
     color: var(--gold);
     font-size: clamp(0.58rem, 1vw, 0.72rem);
     letter-spacing: 0.1em;
+}
+
+.solved-topic-heading-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    margin-bottom: 1.5rem;
+}
+
+.solved-topic-menu {
+    position: relative;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    line-height: 0;
+}
+
+.solved-topic-menu-toggle {
+    display: inline-flex;
+    width: 1.7rem;
+    height: 1.7rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: #8e8999;
+}
+
+.solved-topic-menu-dots {
+    display: grid;
+    gap: 0.15rem;
+    place-items: center;
+}
+
+.solved-topic-menu-dots > span {
+    display: block;
+    width: 0.2rem;
+    height: 0.2rem;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.solved-topic-menu-toggle:hover,
+.solved-topic-menu-toggle[aria-expanded="true"] {
+    background: rgba(168, 102, 255, 0.12);
+    color: var(--gold);
+}
+
+.solved-topic-menu-toggle:focus-visible,
+.solved-topic-menu-item:focus-visible {
+    outline: 1px solid var(--gold);
+    outline-offset: 2px;
+}
+
+.solved-topic-menu-list {
+    position: absolute;
+    z-index: 12;
+    top: calc(100% + 0.35rem);
+    right: 0;
+    min-width: 12rem;
+    padding: 0.35rem;
+    border: 1px solid rgba(168, 102, 255, 0.48);
+    border-radius: 5px;
+    background: rgba(14, 12, 21, 0.98);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.58);
+}
+
+.solved-topic-menu-item {
+    width: 100%;
+    padding: 0.65rem 0.75rem;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: #bbb5c4;
+    font-family: 'NoitaPixel', monospace;
+    font-size: 0.68rem;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.solved-topic-menu-item:hover,
+.solved-topic-menu-item:focus-visible {
+    background: rgba(168, 102, 255, 0.14);
+    color: #fff;
+}
+
+.solved-topic-menu-item + .solved-topic-menu-item {
+    margin-top: 0.2rem;
 }
 
 .solved-topic .riddle-tablet {

@@ -1,7 +1,7 @@
 const LEGACY_STORAGE_KEY = 'noita-riddle-tablets.v1';
 const REVEAL_STORAGE_KEY = 'riddle-tablet-reveals.v1';
 const LEGACY_COMPLETE_STORAGE_KEY = 'riddle-tablet-completions.v1';
-const SOLVED_GROUP_STORAGE_KEY = 'riddle-topic-groups-solved.v1';
+export const SOLVED_GROUP_STORAGE_KEY = 'riddle-topic-groups-solved.v1';
 
 function clean(value, maxLength) {
     return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';

@@ -236,7 +236,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await cards.first().getByRole('button', { name: 'Close tablet' }).isVisible(), true);
     assert.equal(await workSection.locator('.solve-topic-button').isVisible(), true);
     assert.equal(await workSection.locator('.solve-topic-button img').getAttribute('src'), '/images/sampo.png');
-    assert.equal(await workSection.locator('.solve-topic-button small').textContent(), "There's no undo button.");
+    assert.equal(await workSection.locator('.solve-topic-button small').count(), 0);
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.active-topic .tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'true');
@@ -254,8 +254,16 @@ test('topic creation, submission, moderation, presentation, and local group comp
       await page.locator('.solved-topic .topic-heading').evaluate((element) => parseFloat(getComputedStyle(element).fontSize)) < 13
     );
     assert.equal(await page.locator('.solved-topic .riddle-tablet').count(), 2);
-    const solvedHeadingBox = await page.locator('.solved-topic .topic-heading').boundingBox();
-    assert.ok(Math.abs((solvedHeadingBox.x + (solvedHeadingBox.width / 2)) - 720) < 1);
+    const solvedHeadingRowBox = await page.locator('.solved-topic-heading-row').boundingBox();
+    assert.ok(Math.abs((solvedHeadingRowBox.x + (solvedHeadingRowBox.width / 2)) - 720) < 1);
+    const [solvedLabelBox, solvedMenuButtonBox] = await Promise.all([
+      page.locator('.solved-topic .topic-heading').boundingBox(),
+      page.locator('.solved-topic-menu-toggle').boundingBox()
+    ]);
+    assert.ok(Math.abs(
+      (solvedLabelBox.y + (solvedLabelBox.height / 2))
+      - (solvedMenuButtonBox.y + (solvedMenuButtonBox.height / 2))
+    ) < 1);
     assert.equal(await page.locator('#active-topics').isVisible(), false);
     await page.locator('#completion-celebration.dismissible').waitFor();
     await page.waitForFunction(
@@ -271,6 +279,47 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
     assert.equal(await page.locator('#return-topic-button').count(), 0);
     assert.equal(await page.getByRole('link', { name: 'Past topics' }).count(), 0);
+
+    const solvedOptions = page.getByRole('button', { name: 'More options for The Work' });
+    const removeFromSolved = page.getByRole('menuitem', { name: 'Remove from Solved' });
+    const replaySuccess = page.getByRole('menuitem', { name: 'Replay Success' });
+    assert.equal(await solvedOptions.getAttribute('aria-expanded'), 'false');
+    await solvedOptions.click();
+    assert.equal(await solvedOptions.getAttribute('aria-expanded'), 'true');
+    assert.equal(await removeFromSolved.isVisible(), true);
+    assert.deepEqual(await page.getByRole('menuitem').allTextContents(), ['Remove from Solved', 'Replay Success']);
+    await page.evaluate(() => { Math.random = () => 0.75; });
+    await replaySuccess.click();
+    await page.locator('#completion-celebration[data-phase="success"]').waitFor();
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.match(await page.locator('#ancient-sound').getAttribute('src'), /noita-ancient-02\.mp3/);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+
+    await solvedOptions.click();
+    await removeFromSolved.press('Escape');
+    assert.equal(await solvedOptions.getAttribute('aria-expanded'), 'false');
+    await solvedOptions.click();
+    await page.locator('body').click({ position: { x: 4, y: 4 } });
+    assert.equal(await solvedOptions.getAttribute('aria-expanded'), 'false');
+
+    const storagePage = await context.newPage();
+    await storagePage.goto(origin, { waitUntil: 'domcontentloaded' });
+    assert.equal(await storagePage.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    await solvedOptions.click();
+    await removeFromSolved.click();
+    await page.locator('.active-topic .topic-heading').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
+    assert.equal(await page.locator('.solved-topic').count(), 0);
+    assert.equal((await groupRepository.get(groupRepository.groups[0].id)).status, 'active');
+    await storagePage.locator('.active-topic .topic-heading').waitFor({ state: 'visible' });
+    assert.equal(await storagePage.locator('.solved-topic').count(), 0);
+    await storagePage.close();
+
+    await page.locator('.active-topic .solve-topic-button').click();
+    await page.locator('.solved-topic .topic-heading').waitFor({ state: 'visible' });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
 
     const freshContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const freshPage = await freshContext.newPage();

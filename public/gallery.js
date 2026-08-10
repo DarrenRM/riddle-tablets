@@ -7,6 +7,7 @@ import {
 import {
     loadRevealedTabletIds,
     loadSolvedGroupIds,
+    SOLVED_GROUP_STORAGE_KEY,
     setGroupSolved,
     setTabletRevealed
 } from './tablet-store.js';
@@ -42,6 +43,28 @@ document.addEventListener('DOMContentLoaded', () => {
     let longlegIdleTimer = 0;
     let longlegHeartTimer = 0;
     let presentationLoadVersion = 0;
+
+    function closeSolvedMenus(except = null) {
+        document.querySelectorAll('.solved-topic-menu-list:not([hidden])').forEach((menu) => {
+            if (menu === except) return;
+            menu.hidden = true;
+            const toggle = menu.parentElement && menu.parentElement.querySelector('.solved-topic-menu-toggle');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    document.addEventListener('click', (event) => {
+        if (!(event.target instanceof Element) || !event.target.closest('.solved-topic-menu')) closeSolvedMenus();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        const menu = document.querySelector('.solved-topic-menu-list:not([hidden])');
+        if (!menu) return;
+        const toggle = menu.parentElement && menu.parentElement.querySelector('.solved-topic-menu-toggle');
+        closeSolvedMenus();
+        if (toggle) toggle.focus();
+    });
 
     const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
     const scrambleCharacters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -428,9 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
         sampo.setAttribute('aria-hidden', 'true');
         const solveLabel = document.createElement('span');
         solveLabel.textContent = 'Mark topic as solved';
-        const solveFlavor = document.createElement('small');
-        solveFlavor.textContent = "There's no undo button.";
-        groupSolveButton.append(sampo, solveLabel, solveFlavor);
+        groupSolveButton.append(sampo, solveLabel);
         completionActions.appendChild(groupSolveButton);
 
         const canCompleteSingleTopic = allowCompletion && tablets.length === 1;
@@ -477,11 +498,73 @@ document.addEventListener('DOMContentLoaded', () => {
         heading.className = 'topic-heading';
         heading.textContent = `Solved: ${presentation.group.topic}`;
 
+        const headingRow = document.createElement('div');
+        headingRow.className = 'solved-topic-heading-row';
+
+        const menu = document.createElement('div');
+        menu.className = 'solved-topic-menu';
+        const menuToggle = document.createElement('button');
+        menuToggle.type = 'button';
+        menuToggle.className = 'solved-topic-menu-toggle';
+        menuToggle.setAttribute('aria-label', `More options for ${presentation.group.topic}`);
+        menuToggle.setAttribute('aria-haspopup', 'menu');
+        menuToggle.setAttribute('aria-expanded', 'false');
+        const menuDots = document.createElement('span');
+        menuDots.className = 'solved-topic-menu-dots';
+        menuDots.setAttribute('aria-hidden', 'true');
+        menuDots.append(...Array.from({ length: 3 }, () => document.createElement('span')));
+        menuToggle.appendChild(menuDots);
+
+        const menuList = document.createElement('div');
+        menuList.className = 'solved-topic-menu-list';
+        menuList.setAttribute('role', 'menu');
+        menuList.hidden = true;
+        const removeSolved = document.createElement('button');
+        removeSolved.type = 'button';
+        removeSolved.className = 'solved-topic-menu-item';
+        removeSolved.setAttribute('role', 'menuitem');
+        removeSolved.textContent = 'Remove from Solved';
+        const replaySuccess = document.createElement('button');
+        replaySuccess.type = 'button';
+        replaySuccess.className = 'solved-topic-menu-item';
+        replaySuccess.setAttribute('role', 'menuitem');
+        replaySuccess.textContent = 'Replay Success';
+        menuList.append(removeSolved, replaySuccess);
+        menu.append(menuToggle, menuList);
+        headingRow.append(heading, menu);
+
+        menuToggle.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const willOpen = menuList.hidden;
+            closeSolvedMenus(menuList);
+            menuList.hidden = !willOpen;
+            menuToggle.setAttribute('aria-expanded', String(willOpen));
+            if (willOpen) removeSolved.focus();
+        });
+
+        removeSolved.addEventListener('click', () => {
+            setGroupSolved(presentation.group.id, false);
+            renderPresentation();
+            window.requestAnimationFrame(() => {
+                const activeHeading = document.getElementById(`active-topic-heading-${presentation.group.id}`);
+                const nextMenu = solvedTopics.querySelector('.solved-topic-menu-toggle');
+                const focusTarget = activeHeading || nextMenu || waiting.querySelector('h1');
+                if (!focusTarget) return;
+                if (!focusTarget.matches('button, a, input, select, textarea, [tabindex]')) focusTarget.tabIndex = -1;
+                focusTarget.focus({ preventScroll: true });
+            });
+        });
+
+        replaySuccess.addEventListener('click', () => {
+            closeSolvedMenus();
+            celebrateCompletion(presentation.group.id);
+        });
+
         const solvedGrid = document.createElement('div');
         solvedGrid.className = 'tablet-grid';
         const cards = presentation.tablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id)));
         solvedGrid.replaceChildren(...cards);
-        section.append(heading, solvedGrid);
+        section.append(headingRow, solvedGrid);
         return { section, solvedGrid, cards };
     }
 
@@ -621,4 +704,10 @@ document.addEventListener('DOMContentLoaded', () => {
             window.setInterval(() => loadPresentation({ quiet: true }), 10000);
         }
     }
+
+    window.addEventListener('storage', (event) => {
+        if (event.key === SOLVED_GROUP_STORAGE_KEY && mode !== 'preview' && currentPresentations.length) {
+            renderPresentation();
+        }
+    });
 });
