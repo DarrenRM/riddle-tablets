@@ -77,8 +77,8 @@ async function moderatorCookie(app) {
   return login.headers['set-cookie'][0].split(';')[0];
 }
 
-async function createGroup(app, headers, topic = 'The Work') {
-  const created = await request(app, 'POST', '/api/moderation/groups', { topic }, headers);
+async function createGroup(app, headers, topic = 'The Work', fields = {}) {
+  const created = await request(app, 'POST', '/api/moderation/groups', { topic, ...fields }, headers);
   assert.equal(created.status, 201);
   return created.body.group;
 }
@@ -146,6 +146,93 @@ test('groups keep clues private until moderators approve and activate the topic'
   queue = await request(app, 'GET', `/api/moderation/groups/${group.id}/queue`, undefined, headers);
   assert.equal(queue.body.pending.length, 0);
   assert.equal(queue.body.approved.length, 1);
+});
+
+test('multi-step quest settings persist and require at least two approved steps', async () => {
+  const app = createTestApp();
+  const cookie = await moderatorCookie(app);
+  const headers = { Cookie: cookie };
+  const group = await createGroup(app, headers, 'The Fourfold Trial', { multiStep: true });
+  assert.equal(group.multiStep, true);
+  assert.equal(group.questRevision, 1);
+
+  const firstSubmission = await submitClue(app, group, 'First Scribe', 'The first seal waits.');
+  assert.equal(firstSubmission.status, 202);
+  let queue = await request(app, 'GET', `/api/moderation/groups/${group.id}/queue`, undefined, headers);
+  await request(app, 'POST', `/api/moderation/submissions/${queue.body.pending[0].id}/approve`, {
+    author: 'First Scribe',
+    riddle: 'The first seal waits.'
+  }, headers);
+
+  const tooSoon = await request(app, 'POST', `/api/moderation/groups/${group.id}/activate`, undefined, headers);
+  assert.equal(tooSoon.status, 400);
+  assert.match(tooSoon.body.message, /at least two steps/i);
+
+  const secondSubmission = await submitClue(app, group, 'Second Scribe', 'The second seal follows.');
+  assert.equal(secondSubmission.status, 202);
+  queue = await request(app, 'GET', `/api/moderation/groups/${group.id}/queue`, undefined, headers);
+  await request(app, 'POST', `/api/moderation/submissions/${queue.body.pending[0].id}/approve`, {
+    author: 'Second Scribe',
+    riddle: 'The second seal follows.'
+  }, headers);
+  const thirdSubmission = await submitClue(app, group, 'Third Scribe', 'The third seal follows.');
+  assert.equal(thirdSubmission.status, 202);
+
+  const activated = await request(app, 'POST', `/api/moderation/groups/${group.id}/activate`, undefined, headers);
+  assert.equal(activated.status, 200);
+  assert.equal(activated.body.group.multiStep, true);
+  const presentation = await request(app, 'GET', '/api/presentation');
+  assert.equal(presentation.body.group.multiStep, true);
+  assert.equal(presentation.body.group.questRevision, 1);
+  assert.deepEqual(presentation.body.tablets.map((tablet) => tablet.author), ['First Scribe', 'Second Scribe']);
+
+  queue = await request(app, 'GET', `/api/moderation/groups/${group.id}/queue`, undefined, headers);
+  const blockedApproval = await request(app, 'POST', `/api/moderation/submissions/${queue.body.pending[0].id}/approve`, {
+    author: 'Third Scribe',
+    riddle: 'The third seal follows.'
+  }, headers);
+  assert.equal(blockedApproval.status, 409);
+  assert.match(blockedApproval.body.message, /deactivate/i);
+
+  const approvedIds = queue.body.approved.map((tablet) => tablet.id);
+  const blockedReorder = await request(app, 'PUT', `/api/moderation/groups/${group.id}/tablet-order`, {
+    ids: [...approvedIds].reverse()
+  }, headers);
+  assert.equal(blockedReorder.status, 409);
+  const blockedUnpublish = await request(app, 'POST', `/api/moderation/tablets/${approvedIds[0]}/unpublish`, {}, headers);
+  assert.equal(blockedUnpublish.status, 409);
+
+  const renamedWithoutFlag = await request(app, 'PUT', `/api/moderation/groups/${group.id}`, {
+    topic: 'The Renamed Trial'
+  }, headers);
+  assert.equal(renamedWithoutFlag.body.group.multiStep, true);
+  const disabledWhileActive = await request(app, 'PUT', `/api/moderation/groups/${group.id}`, {
+    topic: 'The Renamed Trial',
+    multiStep: false
+  }, headers);
+  assert.equal(disabledWhileActive.status, 409);
+
+  assert.equal((await request(app, 'POST', `/api/moderation/groups/${group.id}/deactivate`, undefined, headers)).status, 200);
+  const disabled = await request(app, 'PUT', `/api/moderation/groups/${group.id}`, {
+    topic: 'The Renamed Trial',
+    multiStep: false
+  }, headers);
+  assert.equal(disabled.body.group.multiStep, false);
+  assert.equal(disabled.body.group.questRevision, 1);
+  const reenabled = await request(app, 'PUT', `/api/moderation/groups/${group.id}`, {
+    topic: 'The Renamed Trial',
+    multiStep: true
+  }, headers);
+  assert.equal(reenabled.body.group.multiStep, true);
+  assert.equal(reenabled.body.group.questRevision, 2);
+
+  assert.equal((await request(app, 'PUT', `/api/moderation/groups/${group.id}/tablet-order`, {
+    ids: [...approvedIds].reverse()
+  }, headers)).status, 200);
+  assert.equal((await request(app, 'POST', `/api/moderation/submissions/${queue.body.pending[0].id}/approve`, {
+    author: 'Third Scribe',
+    riddle: 'The third seal follows.'
+  }, headers)).status, 200);
 });
 
 test('completing a topic atomically archives it without removing its clues or submissions', async () => {

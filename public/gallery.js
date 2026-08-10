@@ -6,9 +6,13 @@ import {
 } from './tablet-api.js';
 import {
     loadRevealedTabletIds,
+    loadQuestCompletedStepCount,
     loadSolvedGroupIds,
+    QUEST_PROGRESS_STORAGE_KEY,
+    resetQuestProgress,
     SOLVED_GROUP_STORAGE_KEY,
     setGroupSolved,
+    setQuestCompletedStepCount,
     setTabletRevealed
 } from './tablet-store.js';
 import { flickerGlyphText, inscribeText } from './tablet-reveal.js';
@@ -43,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let longlegIdleTimer = 0;
     let longlegHeartTimer = 0;
     let presentationLoadVersion = 0;
+    let pendingQuestReveal = null;
 
     function closeSolvedMenus(except = null) {
         document.querySelectorAll('.solved-topic-menu-list:not([hidden])').forEach((menu) => {
@@ -304,12 +309,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createTablet(tablet, wasRevealed, {
         canCompleteTopic = false,
+        questState = null,
+        stepNumber = 0,
+        totalSteps = 0,
+        autoReveal = false,
+        onCompleteStep = () => {},
         onCompleteTopic = () => {},
         onRevealStateChange = () => {}
     } = {}) {
+        const isQuestStep = Boolean(questState);
+        const isLockedStep = questState === 'locked';
+        const isCurrentStep = questState === 'current';
+        const isCompletedStep = questState === 'completed';
+        if (isLockedStep) wasRevealed = false;
         const card = document.createElement('article');
         card.className = `riddle-tablet${wasRevealed ? ' revealed' : ''}`;
         card.classList.toggle('single-topic-tablet', canCompleteTopic);
+        card.classList.toggle('quest-step', isQuestStep);
+        card.classList.toggle('quest-step-locked', isLockedStep);
+        card.classList.toggle('quest-step-current', isCurrentStep);
+        card.classList.toggle('quest-step-completed', isCompletedStep);
         card.setAttribute('aria-expanded', String(wasRevealed));
 
         const toggle = document.createElement('button');
@@ -324,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const kicker = document.createElement('span');
         kicker.className = 'tablet-kicker riddle-author';
-        kicker.textContent = 'Inscribed by';
+        kicker.textContent = isQuestStep ? `Step ${stepNumber} of ${totalSteps} · Inscribed by` : 'Inscribed by';
 
         const author = document.createElement('span');
         author.className = 'riddle-topic riddle-author-name';
@@ -352,17 +371,56 @@ document.addEventListener('DOMContentLoaded', () => {
         prompt.className = 'tablet-open-prompt';
         card.append(toggle, prompt);
 
+        const setPrompt = (expanded) => {
+            prompt.classList.remove('single-topic-solve-prompt', 'quest-step-complete-prompt', 'quest-step-locked-prompt');
+            if (isLockedStep) {
+                prompt.classList.add('quest-step-locked-prompt');
+                prompt.textContent = 'Step Locked';
+                return;
+            }
+            if (expanded && isCompletedStep) {
+                prompt.classList.add('quest-step-complete-prompt');
+                const completeLabel = document.createElement('span');
+                completeLabel.className = 'quest-step-complete-label';
+                completeLabel.textContent = 'Step Complete';
+                const closeLabel = document.createElement('span');
+                closeLabel.className = 'quest-step-close-label';
+                closeLabel.textContent = 'Close tablet';
+                prompt.replaceChildren(completeLabel, closeLabel);
+                return;
+            }
+            prompt.classList.toggle('single-topic-solve-prompt', expanded && (canCompleteTopic || isCurrentStep));
+            prompt.textContent = expanded
+                ? (isCurrentStep ? 'Mark step complete' : (canCompleteTopic ? 'Mark as Solved' : 'Close tablet'))
+                : (isCompletedStep ? 'Review completed step' : 'Reveal tablet');
+        };
+
         const setExpanded = (expanded) => {
+            if (isLockedStep) expanded = false;
             card.setAttribute('aria-expanded', String(expanded));
             toggle.setAttribute('aria-expanded', String(expanded));
-            toggle.setAttribute('aria-label', `${expanded ? 'Close' : 'Open'} clue by ${tablet.author}`);
-            prompt.classList.toggle('single-topic-solve-prompt', expanded && canCompleteTopic);
-            prompt.textContent = expanded
-                ? (canCompleteTopic ? 'Mark as Solved' : 'Close tablet')
-                : 'Reveal tablet';
+            toggle.setAttribute('aria-disabled', String(isLockedStep));
+            toggle.setAttribute('aria-label', isLockedStep
+                ? `Step ${stepNumber} is locked. Complete the previous step first.`
+                : `${expanded ? 'Close' : 'Open'} clue by ${tablet.author}`);
+            setPrompt(expanded);
+            prompt.setAttribute('aria-label', isLockedStep
+                ? `Step ${stepNumber} locked`
+                : (expanded && isCurrentStep ? `Mark step ${stepNumber} complete` : prompt.textContent));
+        };
+
+        const denyLockedStep = () => {
+            card.classList.remove('quest-step-denied');
+            void card.offsetWidth;
+            card.classList.add('quest-step-denied');
+            window.setTimeout(() => card.classList.remove('quest-step-denied'), 460);
         };
 
         const openTablet = () => {
+            if (isLockedStep) {
+                denyLockedStep();
+                return;
+            }
             if (card.classList.contains('revealed') || card.classList.contains('revealing')) return;
             stopAudio(tabletOpenSound);
             tabletOpenSound.volume = 0.55;
@@ -396,13 +454,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         card.addEventListener('click', (event) => {
             if (event.target instanceof Element && event.target.closest('.tablet-open-prompt')) return;
+            if (isLockedStep) {
+                denyLockedStep();
+                return;
+            }
             if (card.classList.contains('revealing')) return;
             if (card.classList.contains('revealed')) closeTablet();
             else openTablet();
         });
         prompt.addEventListener('click', () => {
+            if (isLockedStep) {
+                denyLockedStep();
+                return;
+            }
             if (card.classList.contains('revealing')) return;
-            if (card.classList.contains('revealed') && canCompleteTopic) onCompleteTopic();
+            if (card.classList.contains('revealed') && isCurrentStep) onCompleteStep();
+            else if (card.classList.contains('revealed') && canCompleteTopic) onCompleteTopic();
             else if (card.classList.contains('revealed')) closeTablet();
             else openTablet();
         });
@@ -420,7 +487,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, flickerEvery);
             }, flickerEvery + flickerOffset);
         }
+        if (autoReveal && !isLockedStep) {
+            window.requestAnimationFrame(() => {
+                if (!card.isConnected) return;
+                card.classList.add('quest-step-unlocking');
+                openTablet();
+                window.setTimeout(() => card.classList.remove('quest-step-unlocking'), reduceMotion ? 20 : 2400);
+            });
+        }
         return card;
+    }
+
+    function displayTopic(group) {
+        return group && group.multiStep ? `Multi-step: ${group.topic}` : group.topic;
     }
 
     function createTopicSection(presentation, revealed, { allowCompletion = true } = {}) {
@@ -433,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const heading = document.createElement('h1');
         heading.id = `active-topic-heading-${group.id}`;
         heading.className = 'topic-heading';
-        heading.textContent = group.topic;
+        heading.textContent = displayTopic(group);
 
         const topicGrid = document.createElement('div');
         topicGrid.className = 'tablet-grid';
@@ -454,24 +533,56 @@ document.addEventListener('DOMContentLoaded', () => {
         groupSolveButton.append(sampo, solveLabel);
         completionActions.appendChild(groupSolveButton);
 
-        const canCompleteSingleTopic = allowCompletion && tablets.length === 1;
+        const isMultiStepQuest = Boolean(group.multiStep) && mode !== 'preview';
+        const tabletIds = tablets.map((tablet) => tablet.id);
+        const storedCompletedSteps = isMultiStepQuest
+            ? loadQuestCompletedStepCount(group.id, tabletIds, group.questRevision)
+            : 0;
+        const completedSteps = Math.min(storedCompletedSteps, Math.max(0, tablets.length - 1));
+        const autoRevealId = pendingQuestReveal && pendingQuestReveal.groupId === group.id
+            ? pendingQuestReveal.tabletId
+            : null;
+        if (autoRevealId) pendingQuestReveal = null;
+        const canCompleteSingleTopic = allowCompletion && tablets.length === 1 && !isMultiStepQuest;
         const updateSolveVisibility = () => {
             const anyRevealed = tablets.some((tablet) => loadRevealedTabletIds().has(tablet.id));
             groupSolveButton.classList.toggle(
                 'hidden',
-                !allowCompletion || tablets.length <= 1 || !anyRevealed || loadSolvedGroupIds().has(group.id)
+                isMultiStepQuest || !allowCompletion || tablets.length <= 1 || !anyRevealed || loadSolvedGroupIds().has(group.id)
             );
         };
         const completeTopic = () => celebrateCompletion(group.id);
-        const cards = tablets.map((tablet) => createTablet(
-            tablet,
-            revealed.has(tablet.id),
-            {
-                canCompleteTopic: canCompleteSingleTopic,
-                onCompleteTopic: completeTopic,
-                onRevealStateChange: updateSolveVisibility
+        const completeQuestStep = (index) => {
+            const nextCompletedSteps = index + 1;
+            setQuestCompletedStepCount(group.id, tabletIds, nextCompletedSteps, group.questRevision);
+            if (nextCompletedSteps >= tablets.length) {
+                celebrateCompletion(group.id);
+                return;
             }
-        ));
+            const nextTablet = tablets[nextCompletedSteps];
+            setTabletRevealed(nextTablet.id, false);
+            pendingQuestReveal = { groupId: group.id, tabletId: nextTablet.id };
+            renderPresentation();
+        };
+        const cards = tablets.map((tablet, index) => {
+            const questState = !isMultiStepQuest
+                ? null
+                : (index < completedSteps ? 'completed' : (index === completedSteps ? 'current' : 'locked'));
+            return createTablet(
+                tablet,
+                questState === 'locked' ? false : revealed.has(tablet.id),
+                {
+                    canCompleteTopic: canCompleteSingleTopic,
+                    questState,
+                    stepNumber: index + 1,
+                    totalSteps: tablets.length,
+                    autoReveal: tablet.id === autoRevealId,
+                    onCompleteStep: () => completeQuestStep(index),
+                    onCompleteTopic: completeTopic,
+                    onRevealStateChange: updateSolveVisibility
+                }
+            );
+        });
         topicGrid.replaceChildren(...cards);
         groupSolveButton.addEventListener('click', completeTopic);
         section.append(heading, topicGrid, completionActions);
@@ -496,7 +607,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const heading = document.createElement('h2');
         heading.id = `solved-topic-heading-${presentation.group.id}`;
         heading.className = 'topic-heading';
-        heading.textContent = `Solved: ${presentation.group.topic}`;
+        heading.textContent = `Solved: ${displayTopic(presentation.group)}`;
 
         const headingRow = document.createElement('div');
         headingRow.className = 'solved-topic-heading-row';
@@ -544,6 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         removeSolved.addEventListener('click', () => {
             setGroupSolved(presentation.group.id, false);
+            if (presentation.group.multiStep) resetQuestProgress(presentation.group.id);
             renderPresentation();
             window.requestAnimationFrame(() => {
                 const activeHeading = document.getElementById(`active-topic-heading-${presentation.group.id}`);
@@ -598,9 +710,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             document.title = mode === 'active' && unsolvedPresentations.length > 1
                 ? `${unsolvedPresentations.length} Active Topics · Riddle Tablets`
-                : `${unsolvedPresentations[0].group.topic} · Riddle Tablets`;
+                : `${displayTopic(unsolvedPresentations[0].group)} · Riddle Tablets`;
         } else if (visiblePresentations.length > 0) {
-            document.title = `${visiblePresentations[0].group.topic} · Riddle Tablets`;
+            document.title = `${displayTopic(visiblePresentations[0].group)} · Riddle Tablets`;
         }
 
         if (mode !== 'preview') {
@@ -655,7 +767,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function signature(presentations, available = availablePresentations) {
         const summarize = (presentation) => ({
-            group: presentation.group && [presentation.group.id, presentation.group.updatedAt, presentation.group.status],
+            group: presentation.group && [
+                presentation.group.id,
+                presentation.group.updatedAt,
+                presentation.group.status,
+                Boolean(presentation.group.multiStep),
+                Math.max(0, Math.trunc(Number(presentation.group.questRevision) || 0))
+            ],
             tablets: (presentation.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position])
         });
         return JSON.stringify({
@@ -706,7 +824,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     window.addEventListener('storage', (event) => {
-        if (event.key === SOLVED_GROUP_STORAGE_KEY && mode !== 'preview' && currentPresentations.length) {
+        if ([SOLVED_GROUP_STORAGE_KEY, QUEST_PROGRESS_STORAGE_KEY].includes(event.key)
+            && mode !== 'preview' && currentPresentations.length) {
             renderPresentation();
         }
     });

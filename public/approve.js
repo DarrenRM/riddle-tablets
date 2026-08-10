@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const workspaceShell = document.getElementById('group-workspace-shell');
     const workspaceEmpty = document.getElementById('group-empty');
     const topicInput = document.getElementById('group-topic-input');
+    const multiStepInput = document.getElementById('group-multi-step');
     const submissionLink = document.getElementById('group-submission-link');
     const toggleSubmissions = document.getElementById('toggle-group-submissions');
     const activateButton = document.getElementById('activate-group');
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const createSuccess = document.getElementById('create-group-success');
     const createError = document.getElementById('create-group-error');
     const newTopic = document.getElementById('new-group-topic');
+    const newGroupMultiStep = document.getElementById('new-group-multi-step');
     const createdTopic = document.getElementById('created-group-topic');
     const createdLink = document.getElementById('created-group-link');
     const deleteButton = document.getElementById('delete-group');
@@ -104,18 +106,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const topic = document.createElement('strong');
             topic.textContent = group.topic;
             header.append(topic);
+            const badges = document.createElement('span');
+            badges.className = 'group-list-badges';
             if (group.status === 'active') {
                 const badge = document.createElement('span');
                 badge.className = 'group-mini-status status-active';
                 badge.textContent = 'Active';
-                header.append(badge);
+                badges.append(badge);
             }
             if (group.completedAt) {
                 const badge = document.createElement('span');
                 badge.className = 'group-mini-status status-done';
                 badge.textContent = 'Done';
-                header.append(badge);
+                badges.append(badge);
             }
+            if (badges.childElementCount) header.append(badges);
 
             const counts = document.createElement('span');
             counts.className = 'group-list-counts';
@@ -136,6 +141,11 @@ document.addEventListener('DOMContentLoaded', () => {
         workspaceShell.classList.remove('hidden');
         workspaceEmpty.classList.add('hidden');
         topicInput.value = group.topic;
+        multiStepInput.checked = Boolean(group.multiStep);
+        multiStepInput.disabled = group.status === 'active';
+        multiStepInput.closest('.group-setting-toggle').title = group.status === 'active'
+            ? 'Deactivate this topic before changing Multi-step Quest.'
+            : '';
 
         const url = submissionUrl(group);
         submissionLink.textContent = url;
@@ -229,27 +239,41 @@ document.addEventListener('DOMContentLoaded', () => {
         meta.className = 'moderation-meta';
         const timestamp = record.submittedAt || record.createdAt || record.updatedAt;
         meta.textContent = queueStatus === 'approved'
-            ? `Clue ${index + 1}`
+            ? `${selectedGroup() && selectedGroup().multiStep ? 'Step' : 'Clue'} ${index + 1}`
             : (timestamp ? `Submitted ${new Date(timestamp).toLocaleString()}` : '');
 
         const actions = document.createElement('div');
         actions.className = 'moderation-actions';
+        const group = selectedGroup();
+        const questStructureLocked = Boolean(group && group.multiStep && group.status === 'active');
+        const lockQuestStructureButton = (button) => {
+            if (!questStructureLocked) return button;
+            button.disabled = true;
+            button.title = 'Deactivate this multi-step quest before changing its steps.';
+            return button;
+        };
         if (queueStatus === 'pending') {
             actions.append(
-                actionButton('Approve', 'approve-button', () => perform(row, `/api/moderation/submissions/${record.id}/approve`, 'POST', 'Clue approved.')),
+                lockQuestStructureButton(actionButton('Approve', 'approve-button', () => perform(row, `/api/moderation/submissions/${record.id}/approve`, 'POST', 'Clue approved.'))),
                 actionButton('Save edit', 'save-edit-button', () => perform(row, `/api/moderation/submissions/${record.id}`, 'PUT', 'Pending edit saved.')),
                 actionButton('Reject', 'reject-button', () => perform(row, `/api/moderation/submissions/${record.id}/reject`, 'POST', 'Clue rejected.'))
             );
         } else if (queueStatus === 'approved') {
-            const up = actionButton('Move up', 'quiet-button', () => moveApproved(record.id, -1));
-            const down = actionButton('Move down', 'quiet-button', () => moveApproved(record.id, 1));
-            up.disabled = index === 0;
-            down.disabled = index === queue.approved.length - 1;
+            const itemName = selectedGroup() && selectedGroup().multiStep ? 'step' : 'clue';
+            const up = actionButton(`Move ${itemName} up`, 'quiet-button', () => moveApproved(record.id, -1));
+            const down = actionButton(`Move ${itemName} down`, 'quiet-button', () => moveApproved(record.id, 1));
+            up.disabled = questStructureLocked || index === 0;
+            down.disabled = questStructureLocked || index === queue.approved.length - 1;
+            if (questStructureLocked) {
+                up.title = 'Deactivate this multi-step quest before reordering its steps.';
+                down.title = up.title;
+            }
+            const unapprove = lockQuestStructureButton(actionButton('Unapprove', 'reject-button', () => perform(row, `/api/moderation/tablets/${record.id}/unpublish`, 'POST', 'Clue returned to rejected.')));
             actions.append(
                 up,
                 down,
                 actionButton('Save changes', 'approve-button', () => perform(row, `/api/moderation/tablets/${record.id}`, 'PUT', 'Approved clue updated.')),
-                actionButton('Unapprove', 'reject-button', () => perform(row, `/api/moderation/tablets/${record.id}/unpublish`, 'POST', 'Clue returned to rejected.'))
+                unapprove
             );
         } else {
             actions.append(
@@ -352,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await request('/api/moderation/groups', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: newTopic.value })
+                body: JSON.stringify({ topic: newTopic.value, multiStep: newGroupMultiStep.checked })
             });
             selectedGroupId = result.group.id;
             const url = submissionUrl(result.group);
@@ -377,9 +401,9 @@ document.addEventListener('DOMContentLoaded', () => {
             await request(`/api/moderation/groups/${selectedGroupId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: topicInput.value })
+                body: JSON.stringify({ topic: topicInput.value, multiStep: multiStepInput.checked })
             });
-            showToast('Topic updated.');
+            showToast('Riddle settings updated.');
             await refreshAll();
         } catch (error) {
             status.textContent = error.message;

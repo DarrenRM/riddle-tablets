@@ -184,8 +184,16 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.waitForFunction(() => document.querySelectorAll('.moderation-row').length === 0);
     await page.getByRole('button', { name: /Approved/ }).click();
     await page.waitForFunction(() => document.querySelectorAll('.moderation-row').length === 2);
-    assert.equal(await page.locator('.moderation-row').first().getByRole('button', { name: 'Move up' }).isDisabled(), true);
-    assert.equal(await page.locator('.moderation-row').last().getByRole('button', { name: 'Move down' }).isDisabled(), true);
+    assert.equal(await page.locator('.moderation-row').first().getByRole('button', { name: 'Move clue up' }).isDisabled(), true);
+    assert.equal(await page.locator('.moderation-row').last().getByRole('button', { name: 'Move clue down' }).isDisabled(), true);
+    await page.locator('#group-multi-step').check();
+    await page.locator('#save-group-topic').click();
+    await page.waitForFunction(() => document.querySelector('.moderation-meta')?.textContent.includes('Step 1'));
+    assert.equal(await page.locator('.moderation-row').first().getByRole('button', { name: 'Move step up' }).isDisabled(), true);
+    assert.equal(await page.locator('.moderation-row').last().getByRole('button', { name: 'Move step down' }).isDisabled(), true);
+    await page.locator('#group-multi-step').uncheck();
+    await page.locator('#save-group-topic').click();
+    await page.waitForFunction(() => document.querySelector('.moderation-meta')?.textContent.includes('Clue 1'));
     assert.equal(await page.locator('#toggle-group-completion').textContent(), 'Mark complete');
     await page.locator('#toggle-group-completion').click();
     await page.waitForFunction(() => document.querySelector('#toggle-group-completion').textContent === 'Mark incomplete');
@@ -208,6 +216,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     });
     await page.locator('#activate-group').click();
     await page.waitForFunction(() => document.querySelector('#activate-group').textContent === 'Deactivate');
+    assert.equal(await page.locator('#group-multi-step').isEnabled(), false);
     await page.locator('#delete-group').click();
     await page.locator('#delete-group-dialog').waitFor({ state: 'visible' });
     assert.match(await page.locator('#delete-group-warning').textContent(), /currently live/i);
@@ -513,6 +522,125 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await racePage.locator('.active-topic .topic-heading').textContent(), 'Fresh Topic');
     await racePage.close();
 
+  } finally {
+    if (browser) await browser.close();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('multi-step quests unlock in order, complete on the final step, and reset locally', { timeout: 60000 }, async (t) => {
+  const executablePath = chromeCandidates.find((candidate) => fs.existsSync(candidate));
+  if (!executablePath) return t.skip('No supported local Chromium browser was found.');
+
+  const groupRepository = new MemoryGroupRepository();
+  const tabletRepository = new MemoryTabletRepository();
+  const submissionRepository = new MemorySubmissionRepository();
+  const group = await groupRepository.create({ topic: 'The Fourfold Trial', multiStep: true });
+  for (let index = 0; index < 4; index += 1) {
+    await tabletRepository.save({
+      groupId: group.id,
+      topic: group.topic,
+      author: `Scribe ${index + 1}`,
+      riddle: `Inscription ${index + 1}`,
+      position: index
+    });
+  }
+  await groupRepository.setStatus(group.id, 'active');
+  const app = createApp({
+    groupRepository,
+    tabletRepository,
+    submissionRepository,
+    submissionLimiter: new RateLimiter({ max: 20, windowMs: 60_000 }),
+    config: { moderatorPassword: 'browser-password', logRequests: false },
+    logger: { log() {}, error() {} }
+  });
+  const server = await new Promise((resolve) => {
+    const instance = app.listen(0, '127.0.0.1', () => resolve(instance));
+  });
+
+  let browser;
+  try {
+    browser = await chromium.launch({ executablePath, headless: true });
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    await page.goto(origin, { waitUntil: 'domcontentloaded' });
+
+    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'Multi-step: The Fourfold Trial');
+    assert.equal(await page.locator('.quest-step').count(), 4);
+    assert.equal(await page.locator('.quest-step-current').count(), 1);
+    assert.equal(await page.locator('.quest-step-locked').count(), 3);
+    assert.equal(await page.locator('.solve-topic-button:visible').count(), 0);
+    assert.equal(await page.locator('.quest-step-locked .riddle-text').first().textContent(), '');
+
+    await page.locator('.quest-step-locked').first().click();
+    await page.locator('.quest-step-locked.quest-step-denied').waitFor({ state: 'attached', timeout: 1000 });
+
+    await page.locator('.quest-step-current .tablet-toggle').click();
+    await page.locator('.quest-step-current.revealed').waitFor({ state: 'attached' });
+    assert.equal(await page.locator('.quest-step-current .riddle-text').textContent(), 'Inscription 1');
+    assert.equal(await page.locator('.quest-step-current .tablet-open-prompt').textContent(), 'Mark step complete');
+
+    await page.locator('.quest-step-current .tablet-open-prompt').click();
+    await page.locator('.quest-step-current.revealed .riddle-text').waitFor({ state: 'attached' });
+    assert.equal(await page.locator('.quest-step-completed').count(), 1);
+    assert.equal(await page.locator('.quest-step-current .riddle-text').textContent(), 'Inscription 2');
+    assert.equal(await page.locator('.quest-step-completed .quest-step-complete-label').textContent(), 'Step Complete');
+    await page.mouse.move(0, 0);
+    await new Promise((resolve) => setTimeout(resolve, 220));
+    assert.equal(
+      await page.locator('.quest-step-completed .quest-step-close-label').evaluate((element) => getComputedStyle(element).opacity),
+      '0'
+    );
+    await page.locator('.quest-step-completed .tablet-open-prompt').hover();
+    await new Promise((resolve) => setTimeout(resolve, 220));
+    assert.equal(
+      await page.locator('.quest-step-completed .quest-step-close-label').evaluate((element) => getComputedStyle(element).opacity),
+      '1'
+    );
+
+    for (let completed = 2; completed <= 3; completed += 1) {
+      await page.locator('.quest-step-current .tablet-open-prompt').click();
+      await page.waitForFunction((count) => document.querySelectorAll('.quest-step-completed').length === count, completed);
+      await page.locator('.quest-step-current.revealed').waitFor({ state: 'attached' });
+    }
+    assert.equal(await page.locator('.quest-step-current .riddle-text').textContent(), 'Inscription 4');
+    await page.locator('.quest-step-current .tablet-open-prompt').click();
+    await page.locator('#completion-celebration.visible').waitFor({ state: 'visible' });
+    await page.locator('#completion-celebration.dismissible').waitFor({ state: 'attached', timeout: 3000 });
+    await page.locator('#completion-close').click();
+    await page.locator('#completion-celebration').waitFor({ state: 'hidden' });
+
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: Multi-step: The Fourfold Trial');
+    await page.locator('.solved-topic-menu-toggle').click();
+    await page.getByRole('menuitem', { name: 'Remove from Solved' }).click();
+    await page.waitForFunction(() => document.querySelectorAll('.quest-step-current').length === 1);
+    assert.equal(await page.locator('.quest-step-completed').count(), 0);
+    assert.equal(await page.locator('.quest-step-locked').count(), 3);
+    assert.equal((await groupRepository.get(group.id)).status, 'active');
+
+    await page.locator('.quest-step-current .tablet-open-prompt').click();
+    await page.waitForFunction(() => document.querySelectorAll('.quest-step-completed').length === 1);
+    await groupRepository.setStatus(group.id, 'ready');
+    await groupRepository.update(group.id, { multiStep: false });
+    const restartedQuest = await groupRepository.update(group.id, { multiStep: true });
+    assert.equal(restartedQuest.questRevision, 2);
+    await groupRepository.setStatus(group.id, 'active');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('.quest-step-completed').count(), 0);
+    assert.equal(await page.locator('.quest-step-current .riddle-author-name').textContent(), 'Scribe 1');
+
+    await page.locator('.quest-step-current .tablet-open-prompt').click();
+    await page.waitForFunction(() => document.querySelectorAll('.quest-step-completed').length === 1);
+    const reordered = await tabletRepository.list(group.id);
+    await tabletRepository.save({ ...reordered[0], position: 1 }, reordered[0].id);
+    await tabletRepository.save({ ...reordered[1], position: 0 }, reordered[1].id);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('.quest-step-completed').count(), 0);
+    assert.equal(await page.locator('.quest-step-current .riddle-author-name').textContent(), 'Scribe 2');
+    assert.equal(await page.locator('.quest-step-locked').count(), 3);
+
+    await context.close();
   } finally {
     if (browser) await browser.close();
     await new Promise((resolve) => server.close(resolve));

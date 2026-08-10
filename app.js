@@ -114,6 +114,8 @@ function createDefaultSubmissionLimiter(config) {
 function publicGroup(group) {
   if (!group) return null;
   const { submissionToken, completedAt, ...safe } = group;
+  safe.multiStep = Boolean(group.multiStep);
+  safe.questRevision = Math.max(0, Math.trunc(Number(group.questRevision) || 0));
   // Treat legacy completed records as archived even before their persisted
   // status is repaired. Public consumers must never see active + completed.
   return completedAt && safe.status !== 'archived'
@@ -228,6 +230,16 @@ function createApp(options = {}) {
       repository.list(group.id)
     ]);
     return summarizeGroup(group, approved, groupSubmissions);
+  };
+
+  const requireInactiveQuestStructure = (group) => {
+    if (group && group.multiStep && group.status === 'active' && !group.completedAt) {
+      throw httpError(
+        'group_conflict',
+        'Deactivate this multi-step quest before adding, removing, or reordering its steps.',
+        409
+      );
+    }
   };
 
   app.get('/api/presentation', async (req, res, next) => {
@@ -396,7 +408,10 @@ function createApp(options = {}) {
 
   app.post('/api/moderation/groups', requireModeratorAccess, async (req, res, next) => {
     try {
-      const group = await groups.create({ topic: req.body && req.body.topic });
+      const group = await groups.create({
+        topic: req.body && req.body.topic,
+        multiStep: Boolean(req.body && req.body.multiStep)
+      });
       res.status(201).json({ group: await groupSummary(group) });
     } catch (error) {
       sendKnownError(error, res, next);
@@ -405,7 +420,17 @@ function createApp(options = {}) {
 
   app.put('/api/moderation/groups/:id', requireModeratorAccess, async (req, res, next) => {
     try {
-      const group = await groups.update(req.params.id, { topic: req.body && req.body.topic });
+      const previous = await groups.get(req.params.id);
+      if (!previous) throw httpError('record_not_found', 'That topic no longer exists.', 404);
+      const updates = { topic: req.body && req.body.topic };
+      if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'multiStep')) {
+        const multiStep = Boolean(req.body.multiStep);
+        if (previous.status === 'active' && multiStep !== Boolean(previous.multiStep)) {
+          throw httpError('group_conflict', 'Deactivate this topic before changing Multi-step Quest.', 409);
+        }
+        updates.multiStep = multiStep;
+      }
+      const group = await groups.update(req.params.id, updates);
       const [tablets, pending, rejected] = await Promise.all([
         repository.list(group.id),
         submissions.list('pending', group.id),
@@ -424,11 +449,17 @@ function createApp(options = {}) {
 
   const setGroupStatus = (status) => async (req, res, next) => {
     try {
-      if (status === 'active' && (await repository.list(req.params.id)).length === 0) {
+      const group = await groups.get(req.params.id);
+      if (!group) throw httpError('record_not_found', 'That topic no longer exists.', 404);
+      const approvedCount = status === 'active' ? (await repository.list(req.params.id)).length : 0;
+      if (status === 'active' && approvedCount === 0) {
         throw httpError('invalid_group', 'Approve at least one clue before activating this topic.');
       }
-      const group = await groups.setStatus(req.params.id, status);
-      res.json({ group: await groupSummary(group) });
+      if (status === 'active' && group.multiStep && approvedCount < 2) {
+        throw httpError('invalid_group', 'Approve at least two steps before activating a multi-step quest.');
+      }
+      const updatedGroup = await groups.setStatus(req.params.id, status);
+      res.json({ group: await groupSummary(updatedGroup) });
     } catch (error) {
       sendKnownError(error, res, next);
     }
@@ -515,6 +546,9 @@ function createApp(options = {}) {
 
   app.put('/api/moderation/groups/:id/tablet-order', requireModeratorAccess, async (req, res, next) => {
     try {
+      const group = await groups.get(req.params.id);
+      if (!group) throw httpError('record_not_found', 'That topic no longer exists.', 404);
+      requireInactiveQuestStructure(group);
       const tablets = await repository.list(req.params.id);
       const ids = req.body && Array.isArray(req.body.ids) ? req.body.ids : [];
       const expected = new Set(tablets.map((tablet) => tablet.id));
@@ -590,6 +624,7 @@ function createApp(options = {}) {
       if (!previous.groupId) throw httpError('group_required', 'Import this legacy inscription before approving it.');
       const group = await groups.get(previous.groupId);
       if (!group) throw httpError('record_not_found', 'That topic no longer exists.', 404);
+      requireInactiveQuestStructure(group);
       const approved = await repository.list(group.id);
       const submission = await submissions.update(req.params.id, {
         ...previous,
@@ -655,6 +690,10 @@ function createApp(options = {}) {
       const previous = await repository.get(req.params.id);
       if (!previous) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
       const group = previous.groupId ? await groups.get(previous.groupId) : null;
+      if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'position')
+        && Number(req.body.position) !== Number(previous.position)) {
+        requireInactiveQuestStructure(group);
+      }
       res.json({ tablet: await repository.save({
         ...previous,
         ...req.body,
@@ -671,6 +710,7 @@ function createApp(options = {}) {
       const tablet = await repository.get(req.params.id);
       if (!tablet) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
       const group = tablet.groupId ? await groups.get(tablet.groupId) : null;
+      requireInactiveQuestStructure(group);
       const supplied = req.body && Object.keys(req.body).length ? req.body : tablet;
       const rejected = await submissions.upsert({
         ...tablet,
@@ -688,6 +728,12 @@ function createApp(options = {}) {
   app.post('/api/tablets', requireModeratorAccess, async (req, res, next) => {
     try {
       const id = req.body && req.body.id ? req.body.id : null;
+      const previous = id ? await repository.get(id) : null;
+      const previousGroup = previous && previous.groupId ? await groups.get(previous.groupId) : null;
+      const groupId = (req.body && req.body.groupId) || (previous && previous.groupId);
+      const group = groupId ? await groups.get(groupId) : null;
+      requireInactiveQuestStructure(previousGroup);
+      requireInactiveQuestStructure(group);
       res.status(id ? 200 : 201).json({ tablet: await repository.save(req.body || {}, id) });
     } catch (error) {
       sendKnownError(error, res, next);
@@ -695,6 +741,13 @@ function createApp(options = {}) {
   });
   app.put('/api/tablets/:id', requireModeratorAccess, async (req, res, next) => {
     try {
+      const previous = await repository.get(req.params.id);
+      if (!previous) throw httpError('record_not_found', 'That inscription no longer exists.', 404);
+      const previousGroup = previous.groupId ? await groups.get(previous.groupId) : null;
+      const groupId = (req.body && req.body.groupId) || previous.groupId;
+      const group = groupId ? await groups.get(groupId) : null;
+      requireInactiveQuestStructure(previousGroup);
+      requireInactiveQuestStructure(group);
       res.json({ tablet: await repository.save(req.body || {}, req.params.id) });
     } catch (error) {
       sendKnownError(error, res, next);

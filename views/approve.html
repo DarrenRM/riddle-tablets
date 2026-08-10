@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Riddle Review</title>
     <link rel="icon" type="image/png" href="/images/emerald_tablet.png">
-    <link rel="stylesheet" href="/style.css?v=39">
+    <link rel="stylesheet" href="/style.css?v=46">
 </head>
 <body class="approve-page">
     <div class="approve-container group-approve-container">
@@ -52,8 +52,15 @@
                             <label for="group-topic-input">Topic</label>
                             <div class="group-title-row">
                                 <input id="group-topic-input" type="text" maxlength="120" required>
-                                <button id="save-group-topic" type="button">Save topic</button>
+                                <button id="save-group-topic" type="button">Save settings</button>
                             </div>
+                            <label class="group-setting-toggle" for="group-multi-step">
+                                <input id="group-multi-step" type="checkbox">
+                                <span>
+                                    <strong>Multi-step Quest</strong>
+                                    <small>riddles one at a time, revealed in approved order</small>
+                                </span>
+                            </label>
                         </div>
 
                         <div class="group-link-panel">
@@ -97,6 +104,13 @@
             <label class="form-field" for="new-group-topic">
                 <span>Topic</span>
                 <input id="new-group-topic" type="text" maxlength="120" required autocomplete="off">
+            </label>
+            <label class="group-setting-toggle" for="new-group-multi-step">
+                <input id="new-group-multi-step" type="checkbox">
+                <span>
+                    <strong>Multi-step Quest</strong>
+                    <small>riddles one at a time, revealed in approved order</small>
+                </span>
             </label>
             <p id="create-group-error" class="dialog-error" role="alert"></p>
             <div class="dialog-actions">
@@ -143,6 +157,6 @@
         </form>
     </dialog>
 
-    <script type="module" src="/approve.js?v=14"></script>
+    <script type="module" src="/approve.js?v=17"></script>
 </body>
 </html>

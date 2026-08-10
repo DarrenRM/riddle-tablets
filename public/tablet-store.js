@@ -2,6 +2,7 @@ const LEGACY_STORAGE_KEY = 'noita-riddle-tablets.v1';
 const REVEAL_STORAGE_KEY = 'riddle-tablet-reveals.v1';
 const LEGACY_COMPLETE_STORAGE_KEY = 'riddle-tablet-completions.v1';
 export const SOLVED_GROUP_STORAGE_KEY = 'riddle-topic-groups-solved.v1';
+export const QUEST_PROGRESS_STORAGE_KEY = 'riddle-topic-quest-progress.v1';
 
 function clean(value, maxLength) {
     return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
@@ -19,6 +20,28 @@ function loadIds(key) {
 function saveIds(key, ids) {
     try {
         localStorage.setItem(key, JSON.stringify([...ids]));
+    } catch {}
+}
+
+function questSignature(tabletIds, questRevision) {
+    return JSON.stringify({
+        revision: Math.max(0, Math.trunc(Number(questRevision) || 0)),
+        tabletIds: Array.isArray(tabletIds) ? tabletIds.filter((id) => typeof id === 'string' && id) : []
+    });
+}
+
+function loadQuestProgress() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(QUEST_PROGRESS_STORAGE_KEY) || '{}');
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
+function saveQuestProgress(progress) {
+    try {
+        localStorage.setItem(QUEST_PROGRESS_STORAGE_KEY, JSON.stringify(progress));
     } catch {}
 }
 
@@ -67,6 +90,35 @@ export function setGroupSolved(id, isSolved) {
     if (isSolved) ids.add(id);
     else ids.delete(id);
     saveIds(SOLVED_GROUP_STORAGE_KEY, ids);
+}
+
+export function loadQuestCompletedStepCount(groupId, tabletIds, questRevision) {
+    if (typeof groupId !== 'string' || !groupId) return 0;
+    const entry = loadQuestProgress()[groupId];
+    const signature = questSignature(tabletIds, questRevision);
+    if (!entry || entry.signature !== signature) return 0;
+    const completed = Math.max(0, Math.trunc(Number(entry.completed) || 0));
+    return Math.min(completed, Array.isArray(tabletIds) ? tabletIds.length : 0);
+}
+
+export function setQuestCompletedStepCount(groupId, tabletIds, completed, questRevision) {
+    if (typeof groupId !== 'string' || !groupId) return;
+    const progress = loadQuestProgress();
+    const count = Math.max(0, Math.min(
+        Math.trunc(Number(completed) || 0),
+        Array.isArray(tabletIds) ? tabletIds.length : 0
+    ));
+    if (count === 0) delete progress[groupId];
+    else progress[groupId] = { signature: questSignature(tabletIds, questRevision), completed: count };
+    saveQuestProgress(progress);
+}
+
+export function resetQuestProgress(groupId) {
+    if (typeof groupId !== 'string' || !groupId) return;
+    const progress = loadQuestProgress();
+    if (!Object.prototype.hasOwnProperty.call(progress, groupId)) return;
+    delete progress[groupId];
+    saveQuestProgress(progress);
 }
 
 // Retained only so old browser bundles do not fail while caches expire.
