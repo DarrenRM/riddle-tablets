@@ -3,6 +3,7 @@ const REVEAL_STORAGE_KEY = 'riddle-tablet-reveals.v1';
 const LEGACY_COMPLETE_STORAGE_KEY = 'riddle-tablet-completions.v1';
 export const SOLVED_GROUP_STORAGE_KEY = 'riddle-topic-groups-solved.v1';
 export const QUEST_PROGRESS_STORAGE_KEY = 'riddle-topic-quest-progress.v1';
+export const MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY = 'riddle-main-topic-names-hidden.v1';
 
 function clean(value, maxLength) {
     return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
@@ -90,6 +91,20 @@ export function setGroupSolved(id, isSolved) {
     if (isSolved) ids.add(id);
     else ids.delete(id);
     saveIds(SOLVED_GROUP_STORAGE_KEY, ids);
+}
+
+export function loadMainRiddleNamesHidden() {
+    try {
+        return localStorage.getItem(MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY) === 'true';
+    } catch {
+        return false;
+    }
+}
+
+export function setMainRiddleNamesHidden(isHidden) {
+    try {
+        localStorage.setItem(MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY, String(Boolean(isHidden)));
+    } catch {}
 }
 
 export function loadQuestCompletedStepCount(groupId, tabletIds, questRevision) {

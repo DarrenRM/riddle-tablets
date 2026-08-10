@@ -235,6 +235,52 @@ test('multi-step quest settings persist and require at least two approved steps'
   }, headers)).status, 200);
 });
 
+test('public archive lists approved tablets from every group status without exposing submissions', async () => {
+  const groupRepository = new MemoryGroupRepository();
+  const tabletRepository = new MemoryTabletRepository();
+  const submissionRepository = new MemorySubmissionRepository();
+  const expectedTopics = [];
+
+  for (const status of ['open', 'ready', 'active', 'archived']) {
+    const group = await groupRepository.create({ topic: `${status} approved`, status });
+    expectedTopics.push(group.topic);
+    await tabletRepository.save({
+      groupId: group.id,
+      topic: group.topic,
+      author: `${status} scribe`,
+      riddle: `${status} approved clue`
+    });
+  }
+
+  const pendingOnly = await groupRepository.create({ topic: 'Pending only', status: 'open' });
+  await submissionRepository.create({
+    groupId: pendingOnly.id,
+    topic: pendingOnly.topic,
+    author: 'Private scribe',
+    riddle: 'This clue is not approved.',
+    status: 'pending'
+  });
+  await groupRepository.create({ topic: 'Empty group', status: 'ready' });
+
+  const app = createTestApp({ groupRepository, tabletRepository, submissionRepository });
+  const archive = await request(app, 'GET', '/api/archive');
+  assert.equal(archive.status, 200);
+  assert.equal(archive.headers['cache-control'], 'no-store');
+  assert.deepEqual(
+    archive.body.presentations.map((presentation) => presentation.group.topic).sort(),
+    expectedTopics.sort()
+  );
+  archive.body.presentations.forEach((presentation) => {
+    assert.equal(presentation.tablets.length, 1);
+    assert.equal(Object.hasOwn(presentation.group, 'submissionToken'), false);
+    assert.equal(Object.hasOwn(presentation.group, 'completedAt'), false);
+  });
+  assert.equal(
+    archive.body.presentations.some((presentation) => presentation.tablets.some((tablet) => tablet.author === 'Private scribe')),
+    false
+  );
+});
+
 test('completing a topic atomically archives it without removing its clues or submissions', async () => {
   const app = createTestApp();
   const cookie = await moderatorCookie(app);

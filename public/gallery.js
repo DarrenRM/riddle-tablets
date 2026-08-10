@@ -1,17 +1,20 @@
 import {
     getPreviewPresentation,
     getTopicPresentation,
-    listPresentations,
-    listTopics
+    listArchivePresentations,
+    listPresentations
 } from './tablet-api.js';
 import {
+    loadMainRiddleNamesHidden,
     loadRevealedTabletIds,
     loadQuestCompletedStepCount,
     loadSolvedGroupIds,
     QUEST_PROGRESS_STORAGE_KEY,
+    MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY,
     resetQuestProgress,
     SOLVED_GROUP_STORAGE_KEY,
     setGroupSolved,
+    setMainRiddleNamesHidden,
     setQuestCompletedStepCount,
     setTabletRevealed
 } from './tablet-store.js';
@@ -25,6 +28,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorState = document.getElementById('topic-error');
     const archiveView = document.getElementById('topic-archive');
     const archiveList = document.getElementById('topic-archive-list');
+    const hideRiddleNames = document.getElementById('hide-riddle-names');
+    const mainRiddleNameControl = document.getElementById('main-riddle-name-control');
+    const hideMainRiddleNames = document.getElementById('hide-main-riddle-names');
     const celebration = document.getElementById('completion-celebration');
     const completionTitle = document.getElementById('completion-title');
     const completionClose = document.getElementById('completion-close');
@@ -37,6 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ? 'archive'
         : (routeParts[0] === 'preview' ? 'preview' : (routeParts[0] === 'topics' ? 'topic' : 'active'));
     const routeId = mode === 'preview' ? routeParts[2] : (mode === 'topic' ? routeParts[1] : null);
+
+    if (mode === 'active') hideMainRiddleNames.checked = loadMainRiddleNamesHidden();
 
     let currentPresentations = [];
     let availablePresentations = [];
@@ -267,6 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function installMasonry(targetGrid, cards) {
         let animationFrame = 0;
         targetGrid.classList.toggle('single-tablet-grid', cards.length === 1);
+        targetGrid.classList.toggle('two-tablet-grid', cards.length === 2);
+        targetGrid.classList.toggle('three-tablet-grid', cards.length === 3);
         const columnCount = () => {
             if (window.matchMedia('(max-width: 620px)').matches) return 1;
             if (window.matchMedia('(max-width: 1100px)').matches) return 2;
@@ -275,18 +285,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const layout = () => {
             animationFrame = 0;
             if (!cards.length || targetGrid.classList.contains('hidden')) return;
-            const columns = cards.length === 1 ? 1 : columnCount();
+            const columns = Math.min(cards.length, columnCount());
             const gap = parseFloat(getComputedStyle(targetGrid).columnGap) || 19.2;
             const cardWidth = (targetGrid.clientWidth - gap * (columns - 1)) / columns;
             const columnBottoms = Array(columns).fill(0);
+            const shouldCenterLastRow = cards.length <= 3 && cards.length % columns !== 0;
+            const lastRowStart = shouldCenterLastRow ? cards.length - (cards.length % columns) : cards.length;
+            let centeredLastRowTop = 0;
             cards.forEach((card, index) => {
+                if (index >= lastRowStart) {
+                    if (index === lastRowStart) centeredLastRowTop = Math.max(...columnBottoms);
+                    const lastRowCount = cards.length - lastRowStart;
+                    const rowWidth = lastRowCount * cardWidth + (lastRowCount - 1) * gap;
+                    const rowLeft = (targetGrid.clientWidth - rowWidth) / 2;
+                    const rowIndex = index - lastRowStart;
+                    card.style.width = `${cardWidth}px`;
+                    card.style.left = `${rowLeft + rowIndex * (cardWidth + gap)}px`;
+                    card.style.top = `${centeredLastRowTop}px`;
+                    return;
+                }
                 const column = index % columns;
                 card.style.width = `${cardWidth}px`;
                 card.style.left = `${column * (cardWidth + gap)}px`;
                 card.style.top = `${columnBottoms[column]}px`;
                 columnBottoms[column] += card.offsetHeight + gap;
             });
-            targetGrid.style.height = `${Math.max(0, ...columnBottoms) - gap}px`;
+            const centeredLastRowHeight = shouldCenterLastRow
+                ? centeredLastRowTop + Math.max(...cards.slice(lastRowStart).map((card) => card.offsetHeight))
+                : 0;
+            const masonryHeight = Math.max(0, ...columnBottoms) - gap;
+            targetGrid.style.height = `${Math.max(0, centeredLastRowHeight, masonryHeight)}px`;
             targetGrid.classList.add('masonry-ready');
         };
         const scheduleLayout = () => {
@@ -313,6 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         stepNumber = 0,
         totalSteps = 0,
         autoReveal = false,
+        persistRevealState = true,
         onCompleteStep = () => {},
         onCompleteTopic = () => {},
         onRevealStateChange = () => {}
@@ -425,7 +454,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stopAudio(tabletOpenSound);
             tabletOpenSound.volume = 0.55;
             tabletOpenSound.play().catch(() => {});
-            setTabletRevealed(tablet.id, true);
+            if (persistRevealState) setTabletRevealed(tablet.id, true);
             card.classList.add('revealing');
             setExpanded(true);
             prompt.textContent = 'The tablet awakens...';
@@ -445,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!card.classList.contains('revealed')) return;
             card.classList.remove('revealed');
             setExpanded(false);
-            setTabletRevealed(tablet.id, false);
+            if (persistRevealState) setTabletRevealed(tablet.id, false);
             onRevealStateChange();
             window.setTimeout(() => {
                 if (!card.classList.contains('revealed') && !card.classList.contains('revealing')) riddle.replaceChildren();
@@ -502,6 +531,26 @@ document.addEventListener('DOMContentLoaded', () => {
         return group && group.multiStep ? `Multi-step: ${group.topic}` : group.topic;
     }
 
+    function renderTopicHeadingName(heading, hidden, animate = false) {
+        const topicName = heading.dataset.topicName || '';
+        heading.classList.toggle('archive-topic-name-hidden', hidden);
+        if (hidden) {
+            heading.textContent = topicName;
+            heading.setAttribute('aria-label', 'Riddle name hidden');
+        } else {
+            heading.setAttribute('aria-label', topicName);
+            if (animate) inscribeText(heading, topicName, { duration: 1200 });
+            else heading.textContent = topicName;
+        }
+    }
+
+    function applyMainRiddleNamePreference(animate = false) {
+        if (mode !== 'active') return;
+        document.querySelectorAll('#active-topics .topic-heading, #solved-topics .topic-heading').forEach((heading) => {
+            renderTopicHeadingName(heading, hideMainRiddleNames.checked, animate && !hideMainRiddleNames.checked);
+        });
+    }
+
     function createTopicSection(presentation, revealed, { allowCompletion = true } = {}) {
         const { group, tablets } = presentation;
         const section = document.createElement('section');
@@ -512,7 +561,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const heading = document.createElement('h1');
         heading.id = `active-topic-heading-${group.id}`;
         heading.className = 'topic-heading';
-        heading.textContent = displayTopic(group);
+        heading.dataset.topicName = displayTopic(group);
+        heading.textContent = heading.dataset.topicName;
 
         const topicGrid = document.createElement('div');
         topicGrid.className = 'tablet-grid';
@@ -607,7 +657,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const heading = document.createElement('h2');
         heading.id = `solved-topic-heading-${presentation.group.id}`;
         heading.className = 'topic-heading';
-        heading.textContent = `Solved: ${displayTopic(presentation.group)}`;
+        heading.dataset.topicName = `Solved: ${displayTopic(presentation.group)}`;
+        heading.textContent = heading.dataset.topicName;
 
         const headingRow = document.createElement('div');
         headingRow.className = 'solved-topic-heading-row';
@@ -709,7 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (cards.length) layouts.push(installMasonry(topicGrid, cards));
             });
             document.title = mode === 'active' && unsolvedPresentations.length > 1
-                ? `${unsolvedPresentations.length} Active Topics · Riddle Tablets`
+                ? 'Riddle Tablets'
                 : `${displayTopic(unsolvedPresentations[0].group)} · Riddle Tablets`;
         } else if (visiblePresentations.length > 0) {
             document.title = `${displayTopic(visiblePresentations[0].group)} · Riddle Tablets`;
@@ -731,6 +782,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        if (mode === 'active') {
+            const hasTopicHeadings = Boolean(document.querySelector('#active-topics .topic-heading, #solved-topics .topic-heading'));
+            mainRiddleNameControl.classList.toggle('hidden', !hasTopicHeadings);
+            applyMainRiddleNamePreference();
+        }
+
         stopLayouts = () => layouts.forEach((stop) => stop());
         if (!waiting.classList.contains('hidden')) startLonglegCycle();
     }
@@ -739,27 +796,52 @@ document.addEventListener('DOMContentLoaded', () => {
         hidePresentationViews();
         archiveView.classList.remove('hidden');
         try {
-            const topics = (await listTopics()).filter((topic) => topic.status === 'archived');
-            if (!topics.length) {
+            const presentations = await listArchivePresentations();
+            if (!presentations.length) {
                 const empty = document.createElement('p');
                 empty.className = 'topic-archive-empty';
-                empty.textContent = 'No topics have been archived yet.';
+                empty.textContent = 'No riddles have been approved yet.';
                 archiveList.replaceChildren(empty);
                 return;
             }
-            archiveList.replaceChildren(...topics.map((topic) => {
-                const link = document.createElement('a');
-                link.className = 'topic-archive-card';
-                link.href = `/topics/${encodeURIComponent(topic.id)}`;
-                const label = document.createElement('span');
-                label.textContent = 'Solved topic';
-                const title = document.createElement('strong');
-                title.textContent = topic.topic;
-                const count = document.createElement('small');
-                count.textContent = `${topic.tabletCount} clue${topic.tabletCount === 1 ? '' : 's'}`;
-                link.append(label, title, count);
-                return link;
-            }));
+            const layouts = [];
+            const rendered = presentations.map((presentation) => {
+                const section = document.createElement('section');
+                section.className = 'topic-section archive-topic';
+                section.dataset.groupId = presentation.group.id;
+
+                const heading = document.createElement('h2');
+                heading.className = 'topic-heading archive-topic-name';
+                heading.dataset.topicName = displayTopic(presentation.group);
+                heading.id = `archive-topic-heading-${presentation.group.id}`;
+                section.setAttribute('aria-labelledby', heading.id);
+
+                const grid = document.createElement('div');
+                grid.className = 'tablet-grid';
+                const cards = presentation.tablets.map((tablet) => createTablet(tablet, false, {
+                    persistRevealState: false
+                }));
+                grid.replaceChildren(...cards);
+                section.append(heading, grid);
+                return { section, heading, grid, cards };
+            });
+
+            const setNamesHidden = (hidden, animate = false) => {
+                rendered.forEach(({ heading }) => {
+                    renderTopicHeadingName(heading, hidden, animate && !hidden);
+                });
+            };
+
+            archiveList.replaceChildren(...rendered.map(({ section }) => section));
+            setNamesHidden(hideRiddleNames.checked);
+            hideRiddleNames.addEventListener('change', () => {
+                setNamesHidden(hideRiddleNames.checked, !hideRiddleNames.checked);
+            }, { once: false });
+            rendered.forEach(({ grid, cards }) => {
+                if (cards.length) layouts.push(installMasonry(grid, cards));
+            });
+            stopLayouts = () => layouts.forEach((stop) => stop());
+            document.title = 'Riddle Archive';
         } catch {
             archiveList.textContent = 'The archive could not be reached.';
         }
@@ -823,7 +905,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    hideMainRiddleNames.addEventListener('change', () => {
+        setMainRiddleNamesHidden(hideMainRiddleNames.checked);
+        applyMainRiddleNamePreference(true);
+    });
+
     window.addEventListener('storage', (event) => {
+        if (event.key === MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY && mode === 'active') {
+            hideMainRiddleNames.checked = loadMainRiddleNamesHidden();
+            applyMainRiddleNamePreference();
+            return;
+        }
         if ([SOLVED_GROUP_STORAGE_KEY, QUEST_PROGRESS_STORAGE_KEY].includes(event.key)
             && mode !== 'preview' && currentPresentations.length) {
             renderPresentation();

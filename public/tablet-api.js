@@ -18,6 +18,11 @@ export async function listPresentations() {
     return Array.isArray(result.presentations) ? result.presentations : [];
 }
 
+export async function listArchivePresentations() {
+    const result = await request('/api/archive');
+    return Array.isArray(result.presentations) ? result.presentations : [];
+}
+
 export function getTopicPresentation(id) {
     return request(`/api/topics/${encodeURIComponent(id)}`);
 }

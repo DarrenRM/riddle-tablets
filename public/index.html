@@ -9,10 +9,17 @@
     <link rel="preload" href="/audio/noita-ancient-01.mp3?v=1" as="audio" type="audio/mpeg">
     <link rel="preload" href="/audio/noita-ancient-02.mp3?v=1" as="audio" type="audio/mpeg">
     <link rel="preload" href="/audio/noita-tablet-open-orb.mp3?v=1" as="audio" type="audio/mpeg">
-    <link rel="stylesheet" href="/style.css?v=43">
+    <link rel="stylesheet" href="/style.css?v=46">
 </head>
 <body class="archive-page">
     <main class="archive-container">
+        <div id="main-riddle-name-control" class="archive-name-control main-riddle-name-control hidden">
+            <label for="hide-main-riddle-names">
+                <input id="hide-main-riddle-names" type="checkbox">
+                <span>Hide Riddle Name</span>
+            </label>
+        </div>
+
         <section id="waiting-state" class="archive-empty waiting-state hidden" aria-live="polite">
             <div class="longleg-stage" aria-hidden="true">
                 <span class="longleg-sprite"></span>
@@ -32,10 +39,15 @@
         </section>
 
         <section id="topic-archive" class="topic-archive hidden" aria-labelledby="topic-archive-heading">
+            <div class="archive-name-control">
+                <label for="hide-riddle-names">
+                    <input id="hide-riddle-names" type="checkbox" checked>
+                    <span>Hide Riddle Name</span>
+                </label>
+            </div>
             <header class="topic-archive-header">
-                <p class="eyebrow">Previously revealed</p>
-                <h1 id="topic-archive-heading">Past topics</h1>
-                <a href="/" class="text-link">Return to the current topic</a>
+                <p class="eyebrow">Approved inscriptions</p>
+                <h1 id="topic-archive-heading">Riddle Archive</h1>
             </header>
             <div id="topic-archive-list" class="topic-archive-list"></div>
         </section>
@@ -54,6 +66,6 @@
     <audio id="tablet-open-sound" preload="auto" aria-hidden="true">
         <source src="/audio/noita-tablet-open-orb.mp3?v=1" type="audio/mpeg">
     </audio>
-    <script type="module" src="/gallery.js?v=33"></script>
+    <script type="module" src="/gallery.js?v=39"></script>
 </body>
 </html>

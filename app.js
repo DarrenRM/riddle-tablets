@@ -264,6 +264,20 @@ function createApp(options = {}) {
     }
   });
 
+  app.get('/api/archive', async (req, res, next) => {
+    try {
+      const [groupRecords, tabletRecords] = await Promise.all([groups.list(), repository.list()]);
+      const tabletsByGroup = recordsByGroup(tabletRecords);
+      const presentations = groupRecords
+        .map((group) => presentationFromRecords(group, tabletsByGroup.get(group.id) || []))
+        .filter((presentation) => presentation.tablets.length > 0);
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ presentations });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get('/api/topics', async (req, res, next) => {
     try {
       const [groupRecords, tabletRecords] = await Promise.all([groups.list(), repository.list()]);

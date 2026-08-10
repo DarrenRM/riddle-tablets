@@ -250,9 +250,47 @@ test('topic creation, submission, moderation, presentation, and local group comp
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
+    assert.equal(await page.locator('#hide-main-riddle-names').isChecked(), false);
+    await page.locator('#hide-main-riddle-names').check();
+    assert.equal(await page.locator('.active-topic .topic-heading.archive-topic-name-hidden').count(), 1);
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem('riddle-main-topic-names-hidden.v1')),
+      'true'
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    assert.equal(await page.locator('#hide-main-riddle-names').isChecked(), true);
+    assert.equal(await page.locator('.active-topic .topic-heading.archive-topic-name-hidden').count(), 1);
+    assert.match(
+      await page.locator('.active-topic .topic-heading').evaluate((heading) => getComputedStyle(heading).fontFamily),
+      /NoitaGlyph/
+    );
+    await page.locator('#hide-main-riddle-names').uncheck();
+    await page.waitForFunction(() => {
+      const heading = document.querySelector('.active-topic .topic-heading');
+      return heading && !heading.classList.contains('archive-topic-name-hidden')
+        && heading.querySelectorAll('.glyph-char').length === 0;
+    });
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem('riddle-main-topic-names-hidden.v1')),
+      'false'
+    );
+    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
     const workSection = page.locator('.active-topic').filter({ hasText: 'The Work' });
     const cards = workSection.locator('.tablet-grid .riddle-tablet');
     assert.equal(await cards.count(), 2);
+    const workGrid = workSection.locator('.tablet-grid');
+    await page.waitForFunction(() => document.querySelector('.active-topic .tablet-grid').classList.contains('masonry-ready'));
+    assert.equal(await workGrid.evaluate((grid) => grid.classList.contains('two-tablet-grid')), true);
+    const [workGridBox, firstWorkCardBox, secondWorkCardBox] = await Promise.all([
+      workGrid.boundingBox(),
+      cards.first().boundingBox(),
+      cards.nth(1).boundingBox()
+    ]);
+    assert.ok(firstWorkCardBox.width > 400);
+    assert.ok(Math.abs(
+      (workGridBox.x + workGridBox.width / 2)
+      - (firstWorkCardBox.x + (secondWorkCardBox.x + secondWorkCardBox.width - firstWorkCardBox.x) / 2)
+    ) < 1);
     assert.equal(await cards.first().getAttribute('aria-expanded'), 'false');
     assert.equal(await cards.first().locator('.riddle-author').textContent(), 'Inscribed by');
     assert.match(
@@ -465,14 +503,71 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await completedPage.locator('#active-topics').isVisible(), false);
     await completedContext.close();
 
+    const audienceGroup = await groupRepository.create({ topic: 'Audience Preview', status: 'ready' });
+    await tabletRepository.save({
+      groupId: audienceGroup.id,
+      topic: audienceGroup.topic,
+      author: 'Archive Scribe',
+      riddle: 'Approved before activation.',
+      position: 0
+    });
+    await tabletRepository.save({
+      groupId: audienceGroup.id,
+      topic: audienceGroup.topic,
+      author: 'Second Archive Scribe',
+      riddle: 'A second approved inscription.',
+      position: 1
+    });
+    await tabletRepository.save({
+      groupId: audienceGroup.id,
+      topic: audienceGroup.topic,
+      author: 'Third Archive Scribe',
+      riddle: 'A third approved inscription.',
+      position: 2
+    });
+
+    const revealStateBeforeArchive = await page.evaluate(() => localStorage.getItem('riddle-tablet-reveals.v1'));
     await page.goto(`${origin}/archive`, { waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.topic-archive-card').count(), 2);
+    await page.locator('.archive-topic').first().waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.archive-topic').count(), 3);
     assert.deepEqual(
-      (await page.locator('.topic-archive-card strong').allTextContents()).sort(),
-      ['The Moon', 'The Work'].sort()
+      (await page.locator('.archive-topic-name').allTextContents()).sort(),
+      ['Audience Preview', 'The Moon', 'The Work'].sort()
     );
-    await page.locator('.topic-archive-card').filter({ hasText: 'The Work' }).click();
-    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.equal(await page.locator('#hide-riddle-names').isChecked(), true);
+    assert.equal(await page.locator('.archive-topic-name-hidden').count(), 3);
+    assert.deepEqual(
+      await page.locator('.archive-topic-name').evaluateAll((headings) => headings.map((heading) => heading.getAttribute('aria-label'))),
+      ['Riddle name hidden', 'Riddle name hidden', 'Riddle name hidden']
+    );
+    assert.match(
+      await page.locator('.archive-topic-name').first().evaluate((heading) => getComputedStyle(heading).fontFamily),
+      /NoitaGlyph/
+    );
+
+    await page.locator('#hide-riddle-names').uncheck();
+    await page.waitForFunction(() => [...document.querySelectorAll('.archive-topic-name')].every((heading) => (
+      !heading.classList.contains('archive-topic-name-hidden')
+      && heading.querySelectorAll('.glyph-char').length === 0
+      && heading.querySelectorAll('.pixel-char').length > 0
+    )));
+    assert.deepEqual(
+      (await page.locator('.archive-topic-name').allTextContents()).sort(),
+      ['Audience Preview', 'The Moon', 'The Work'].sort()
+    );
+    await page.locator('#hide-riddle-names').check();
+    assert.equal(await page.locator('.archive-topic-name-hidden').count(), 3);
+    assert.equal(await page.locator('.archive-topic .riddle-tablet').count(), 6);
+    const audienceArchiveGrid = page.locator(`.archive-topic[data-group-id="${audienceGroup.id}"] .tablet-grid`);
+    assert.equal(await audienceArchiveGrid.evaluate((grid) => grid.classList.contains('three-tablet-grid')), true);
+    assert.equal(await page.locator('.archive-topic .riddle-tablet.revealed').count(), 0);
+    const firstArchiveTablet = page.locator('.archive-topic .riddle-tablet').first();
+    await firstArchiveTablet.getByRole('button', { name: 'Reveal tablet' }).click();
+    await page.waitForFunction(() => document.querySelector('.archive-topic .riddle-tablet').classList.contains('revealed'));
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem('riddle-tablet-reveals.v1')),
+      revealStateBeforeArchive
+    );
 
     const deleteGroup = await groupRepository.create({ topic: 'Delete Me' });
     await tabletRepository.save({
