@@ -186,14 +186,35 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.waitForFunction(() => document.querySelectorAll('.moderation-row').length === 2);
     assert.equal(await page.locator('.moderation-row').first().getByRole('button', { name: 'Move clue up' }).isDisabled(), true);
     assert.equal(await page.locator('.moderation-row').last().getByRole('button', { name: 'Move clue down' }).isDisabled(), true);
+    await page.route('**/api/moderation/groups/*', async (route) => {
+      if (route.request().method() === 'PUT') await new Promise((resolve) => setTimeout(resolve, 300));
+      await route.continue();
+    });
+    await page.locator('#group-topic-input').fill('An unsaved topic title');
     await page.locator('#group-multi-step').check();
-    await page.locator('#save-group-topic').click();
+    assert.equal(await page.locator('#save-group-topic').isDisabled(), true);
+    assert.equal(await page.locator('#activate-group').isDisabled(), true);
     await page.waitForFunction(() => document.querySelector('.moderation-meta')?.textContent.includes('Step 1'));
+    assert.equal(await page.locator('#group-topic-input').evaluate((element) => element.value), 'An unsaved topic title');
+    assert.equal(await page.locator('#save-group-topic').isEnabled(), true);
+    assert.equal(await page.locator('#activate-group').isEnabled(), true);
     assert.equal(await page.locator('.moderation-row').first().getByRole('button', { name: 'Move step up' }).isDisabled(), true);
     assert.equal(await page.locator('.moderation-row').last().getByRole('button', { name: 'Move step down' }).isDisabled(), true);
+    await page.locator('#group-topic-input').fill('The Work');
     await page.locator('#group-multi-step').uncheck();
-    await page.locator('#save-group-topic').click();
     await page.waitForFunction(() => document.querySelector('.moderation-meta')?.textContent.includes('Clue 1'));
+    await page.unroute('**/api/moderation/groups/*');
+    await page.route('**/api/moderation/groups/*', (route) => route.fulfill({
+      status: 500,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Settings could not be saved.' })
+    }));
+    await page.locator('#group-multi-step').check();
+    await page.waitForFunction(() => document.querySelector('#moderation-status')?.textContent.includes('Settings could not be saved.'));
+    assert.equal(await page.locator('#group-multi-step').isChecked(), false);
+    assert.equal(await page.locator('#save-group-topic').isEnabled(), true);
+    assert.equal(await page.locator('#activate-group').isEnabled(), true);
+    await page.unroute('**/api/moderation/groups/*');
     assert.equal(await page.locator('#toggle-group-completion').textContent(), 'Mark complete');
     await page.locator('#toggle-group-completion').click();
     await page.waitForFunction(() => document.querySelector('#toggle-group-completion').textContent === 'Mark incomplete');

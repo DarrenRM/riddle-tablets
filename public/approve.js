@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const workspaceEmpty = document.getElementById('group-empty');
     const topicInput = document.getElementById('group-topic-input');
     const multiStepInput = document.getElementById('group-multi-step');
+    const saveSettingsButton = document.getElementById('save-group-topic');
     const submissionLink = document.getElementById('group-submission-link');
     const toggleSubmissions = document.getElementById('toggle-group-submissions');
     const activateButton = document.getElementById('activate-group');
@@ -39,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let queue = { pending: [], approved: [], rejected: [] };
     let activeQueue = 'pending';
     let toastTimer = 0;
+    let settingsSaveInFlight = false;
 
     async function request(url, options = {}) {
         const response = await fetch(url, options);
@@ -141,22 +143,28 @@ document.addEventListener('DOMContentLoaded', () => {
         workspaceShell.classList.remove('hidden');
         workspaceEmpty.classList.add('hidden');
         topicInput.value = group.topic;
+        topicInput.disabled = settingsSaveInFlight;
         multiStepInput.checked = Boolean(group.multiStep);
-        multiStepInput.disabled = group.status === 'active';
+        multiStepInput.disabled = settingsSaveInFlight || group.status === 'active';
         multiStepInput.closest('.group-setting-toggle').title = group.status === 'active'
             ? 'Deactivate this topic before changing Multi-step Quest.'
-            : '';
+            : (settingsSaveInFlight ? 'Saving Multi-step Quest…' : '');
+        saveSettingsButton.disabled = settingsSaveInFlight;
 
         const url = submissionUrl(group);
         submissionLink.textContent = url;
         submissionLink.title = url;
         toggleSubmissions.textContent = group.status === 'open' ? 'Close submissions' : 'Reopen submissions';
-        toggleSubmissions.disabled = group.status === 'active' || Boolean(group.completedAt);
-        activateButton.disabled = Boolean(group.completedAt) || (group.status !== 'active' && group.counts.approved === 0);
+        toggleSubmissions.disabled = settingsSaveInFlight || group.status === 'active' || Boolean(group.completedAt);
+        activateButton.disabled = settingsSaveInFlight
+            || Boolean(group.completedAt)
+            || (group.status !== 'active' && group.counts.approved === 0);
         activateButton.textContent = group.completedAt
             ? 'Mark incomplete first'
             : (group.status === 'active' ? 'Deactivate' : 'Make active');
         toggleCompletion.textContent = group.completedAt ? 'Mark incomplete' : 'Mark complete';
+        toggleCompletion.disabled = settingsSaveInFlight;
+        deleteButton.disabled = settingsSaveInFlight;
     }
 
     function fieldsFrom(row) {
@@ -396,7 +404,43 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('copy-created-group-link').addEventListener('click', (event) => copyText(createdLink.textContent, event.currentTarget));
     document.getElementById('copy-group-link').addEventListener('click', (event) => copyText(submissionLink.textContent, event.currentTarget));
 
-    document.getElementById('save-group-topic').addEventListener('click', async () => {
+    multiStepInput.addEventListener('change', async () => {
+        const group = selectedGroup();
+        if (!group || group.status === 'active' || settingsSaveInFlight) {
+            if (group) multiStepInput.checked = Boolean(group.multiStep);
+            return;
+        }
+
+        const groupId = group.id;
+        const previousValue = Boolean(group.multiStep);
+        const nextValue = multiStepInput.checked;
+        const pendingTopicValue = topicInput.value;
+        group.multiStep = nextValue;
+        settingsSaveInFlight = true;
+        renderGroupHeader();
+        topicInput.value = pendingTopicValue;
+        let saveError = '';
+        try {
+            const result = await request(`/api/moderation/groups/${groupId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic: group.topic, multiStep: nextValue })
+            });
+            Object.assign(group, result.group);
+            showToast(`Multi-step Quest ${nextValue ? 'enabled' : 'disabled'}.`);
+        } catch (error) {
+            group.multiStep = previousValue;
+            saveError = error.message;
+        } finally {
+            settingsSaveInFlight = false;
+            await refreshAll();
+            if (selectedGroupId === groupId) topicInput.value = pendingTopicValue;
+            if (saveError) status.textContent = saveError;
+        }
+    });
+
+    saveSettingsButton.addEventListener('click', async () => {
+        if (settingsSaveInFlight) return;
         try {
             await request(`/api/moderation/groups/${selectedGroupId}`, {
                 method: 'PUT',
@@ -415,6 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
         changeStatus(group.status === 'open' ? 'close' : 'open', null, group.status === 'open' ? 'Submissions closed.' : 'Submissions reopened.');
     });
     activateButton.addEventListener('click', () => {
+        if (settingsSaveInFlight) return;
         const group = selectedGroup();
         if (!group) return;
         if (group.status === 'active') {
