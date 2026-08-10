@@ -175,7 +175,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
       assert.equal(await page.locator(selector).count(), 0);
     }
     assert.equal(await page.locator('#delete-group').count(), 1);
-    assert.match(await page.getByRole('button', { name: /Pending/ }).textContent(), /2/);
+    assert.match(await page.locator('.moderation-tabs').getByRole('button', { name: /Pending/ }).textContent(), /2/);
     assert.equal(await page.locator('.moderation-row').count(), 2);
 
     await page.locator('.moderation-row').first().getByRole('button', { name: 'Approve' }).click();
@@ -642,6 +642,38 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await new Promise((resolve) => setTimeout(resolve, 500));
     assert.equal(await racePage.locator('.active-topic .topic-heading').textContent(), 'Fresh Topic');
     await racePage.close();
+
+    const sortPage = await context.newPage();
+    const sidebarGroups = [
+      { id: 'active-pending', topic: 'Active Pending', status: 'active', completedAt: null, submissionToken: 'activependingtoken1234567890', counts: { pending: 2, approved: 1, rejected: 0 } },
+      { id: 'ordinary', topic: 'Ordinary Topic', status: 'open', completedAt: null, submissionToken: 'ordinarytopictoken1234567890', counts: { pending: 0, approved: 0, rejected: 0 } },
+      { id: 'ready-pending', topic: 'Ready Pending', status: 'ready', completedAt: null, submissionToken: 'readypendingtoken1234567890', counts: { pending: 3, approved: 1, rejected: 0 } },
+      { id: 'done-pending', topic: 'Done Pending', status: 'archived', completedAt: 1, submissionToken: 'donependingtoken1234567890', counts: { pending: 1, approved: 1, rejected: 0 } },
+      { id: 'done', topic: 'Done Topic', status: 'archived', completedAt: 1, submissionToken: 'donetopictoken1234567890123', counts: { pending: 0, approved: 1, rejected: 0 } }
+    ];
+    await sortPage.route('**/api/moderation/groups', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ groups: sidebarGroups, legacy: { tablets: 0, submissions: 0 } })
+    }));
+    await sortPage.route('**/api/moderation/groups/*/queue', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ pending: [], approved: [], rejected: [] })
+    }));
+    await sortPage.goto(`${origin}/approve`, { waitUntil: 'domcontentloaded' });
+    await sortPage.locator('.group-list-item').first().waitFor({ state: 'visible' });
+    assert.deepEqual(
+      await sortPage.locator('.group-list-item strong').allTextContents(),
+      ['Active Pending', 'Ready Pending', 'Done Pending', 'Ordinary Topic', 'Done Topic']
+    );
+    const activePendingItem = sortPage.locator('.group-list-item').filter({ hasText: 'Active Pending' });
+    assert.equal(await activePendingItem.locator('.status-active').count(), 1);
+    assert.equal(await activePendingItem.locator('.status-pending').count(), 1);
+    const donePendingItem = sortPage.locator('.group-list-item').filter({ hasText: 'Done Pending' });
+    assert.equal(await donePendingItem.locator('.status-pending').count(), 1);
+    assert.equal(await donePendingItem.locator('.status-done').count(), 1);
+    await sortPage.close();
 
   } finally {
     if (browser) await browser.close();

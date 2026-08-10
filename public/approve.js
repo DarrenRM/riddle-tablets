@@ -116,6 +116,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 badge.textContent = 'Active';
                 badges.append(badge);
             }
+            if (group.counts.pending > 0) {
+                const badge = document.createElement('span');
+                badge.className = 'group-mini-status status-pending';
+                badge.textContent = 'Pending';
+                badges.append(badge);
+            }
             if (group.completedAt) {
                 const badge = document.createElement('span');
                 badge.className = 'group-mini-status status-done';
@@ -324,7 +330,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadGroups() {
         const result = await request('/api/moderation/groups');
-        groups = result.groups.sort((left, right) => Boolean(left.completedAt) - Boolean(right.completedAt));
+        const priority = (group) => {
+            if (group.status === 'active' && !group.completedAt) return 0;
+            if (group.counts.pending > 0) return 1;
+            return group.completedAt ? 3 : 2;
+        };
+        groups = result.groups.sort((left, right) => priority(left) - priority(right));
         const legacyCount = result.legacy.tablets + result.legacy.submissions;
         legacyBanner.classList.toggle('hidden', legacyCount === 0);
         legacySummary.textContent = legacyCount
