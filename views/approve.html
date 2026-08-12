@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Riddle Review</title>
     <link rel="icon" type="image/png" href="/images/emerald_tablet.png">
-    <link rel="stylesheet" href="/style.css?v=54">
+    <link rel="stylesheet" href="/style.css?v=58">
 </head>
 <body class="approve-page">
     <div class="approve-container group-approve-container">
@@ -61,6 +61,13 @@
                                     <small>riddles one at a time, revealed in approved order</small>
                                 </span>
                             </label>
+                            <label class="group-setting-toggle custom-tooltip" for="group-side-quest">
+                                <input id="group-side-quest" type="checkbox">
+                                <span>
+                                    <strong>Side Quest</strong>
+                                    <small>keeps the side-quest label readable on public pages</small>
+                                </span>
+                            </label>
                         </div>
 
                         <div class="group-link-panel">
@@ -112,6 +119,13 @@
                     <small>riddles one at a time, revealed in approved order</small>
                 </span>
             </label>
+            <label class="group-setting-toggle" for="new-group-side-quest">
+                <input id="new-group-side-quest" type="checkbox">
+                <span>
+                    <strong>Side Quest</strong>
+                    <small>keeps the side-quest label readable on public pages</small>
+                </span>
+            </label>
             <p id="create-group-error" class="dialog-error" role="alert"></p>
             <div class="dialog-actions">
                 <button type="button" data-close-dialog>Cancel</button>
@@ -157,6 +171,6 @@
         </form>
     </dialog>
 
-    <script type="module" src="/approve.js?v=20"></script>
+    <script type="module" src="/approve.js?v=21"></script>
 </body>
 </html>

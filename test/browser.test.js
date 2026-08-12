@@ -95,6 +95,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('#new-group-button').click();
     await page.locator('#create-group-dialog').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#create-group-dialog').getByText(/Discord URL/i).count(), 0);
+    assert.equal(await page.locator('#new-group-side-quest').isChecked(), false);
     await page.locator('#new-group-topic').fill('The Work');
     await page.locator('#create-group-submit').click();
     await page.locator('#create-group-success').waitFor({ state: 'visible' });
@@ -216,7 +217,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('#activate-group').isDisabled(), true);
     assert.match(
       await page.locator('label[for="group-multi-step"]').getAttribute('data-tooltip'),
-      /^Saving Multi-step Quest/
+      /^Saving riddle settings/
     );
     await page.waitForFunction(() => document.querySelector('.moderation-meta')?.textContent.includes('Step 1'));
     assert.equal(await page.locator('#group-topic-input').evaluate((element) => element.value), 'An unsaved topic title');
@@ -227,6 +228,18 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('#group-topic-input').fill('The Work');
     await page.locator('#group-multi-step').uncheck();
     await page.waitForFunction(() => document.querySelector('.moderation-meta')?.textContent.includes('Clue 1'));
+    assert.equal(await page.locator('#group-side-quest').isChecked(), false);
+    await page.locator('#group-side-quest').check();
+    assert.match(
+      await page.locator('label[for="group-side-quest"]').getAttribute('data-tooltip'),
+      /^Saving riddle settings/
+    );
+    await page.waitForFunction(() => !document.querySelector('#group-side-quest').disabled);
+    const workGroupId = (await groupRepository.list()).find((record) => record.topic === 'The Work').id;
+    assert.equal((await groupRepository.get(workGroupId)).sideQuest, true);
+    await page.locator('#group-side-quest').uncheck();
+    await page.waitForFunction(() => !document.querySelector('#group-side-quest').disabled);
+    assert.equal((await groupRepository.get(workGroupId)).sideQuest, false);
     await page.unroute('**/api/moderation/groups/*');
     await page.route('**/api/moderation/groups/*', (route) => route.fulfill({
       status: 500,
@@ -262,6 +275,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('#activate-group').click();
     await page.waitForFunction(() => document.querySelector('#activate-group').textContent === 'Deactivate');
     assert.equal(await page.locator('#group-multi-step').isEnabled(), false);
+    assert.equal(await page.locator('#group-side-quest').isEnabled(), false);
     const disabledMultiStepToggle = page.locator('label[for="group-multi-step"]');
     assert.equal(
       await disabledMultiStepToggle.getAttribute('data-tooltip'),
@@ -279,6 +293,10 @@ test('topic creation, submission, moderation, presentation, and local group comp
       await disabledMultiStepToggle.evaluate((element) => getComputedStyle(element, '::after').opacity),
       '1'
     );
+    assert.equal(
+      await page.locator('label[for="group-side-quest"]').getAttribute('data-tooltip'),
+      'Deactivate this topic before changing Side Quest.'
+    );
     await page.locator('#delete-group').click();
     await page.locator('#delete-group-dialog').waitFor({ state: 'visible' });
     assert.match(await page.locator('#delete-group-warning').textContent(), /currently live/i);
@@ -292,7 +310,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
     assert.equal(await page.locator('#hide-main-riddle-names').count(), 0);
-    assert.equal(await page.locator('.active-topic .topic-heading.topic-name-hidden').count(), 1);
+    assert.equal(await page.locator('.active-topic .topic-heading-name.topic-name-hidden').count(), 1);
     const revealWorkTitle = page.getByRole('button', { name: 'Reveal title' });
     assert.equal(await revealWorkTitle.getAttribute('data-tooltip'), 'Reveal Title');
     assert.equal(await revealWorkTitle.getAttribute('aria-pressed'), 'false');
@@ -304,35 +322,46 @@ test('topic creation, submission, moderation, presentation, and local group comp
     );
     await revealWorkTitle.click();
     await page.waitForFunction(() => {
-      const heading = document.querySelector('.active-topic .topic-heading');
-      return heading && !heading.classList.contains('topic-name-hidden')
-        && heading.querySelectorAll('.glyph-char').length === 0;
+      const name = document.querySelector('.active-topic .topic-heading-name');
+      return name && !name.classList.contains('topic-name-hidden')
+        && name.querySelectorAll('.glyph-char').length === 0;
     });
     assert.equal(await page.getByRole('button', { name: 'Hide title' }).getAttribute('data-tooltip'), 'Hide Title');
 
     const titleSyncPage = await context.newPage();
     await titleSyncPage.goto(origin, { waitUntil: 'domcontentloaded' });
-    assert.equal(await titleSyncPage.locator('.active-topic .topic-heading.topic-name-hidden').count(), 0);
+    assert.equal(await titleSyncPage.locator('.active-topic .topic-heading-name.topic-name-hidden').count(), 0);
     await page.getByRole('button', { name: 'Hide title' }).click();
-    await titleSyncPage.locator('.active-topic .topic-heading.topic-name-hidden').waitFor({ state: 'attached' });
+    await titleSyncPage.locator('.active-topic .topic-heading-name.topic-name-hidden').waitFor({ state: 'attached' });
     await page.waitForFunction(() => {
-      const heading = document.querySelector('.active-topic .topic-heading');
-      return heading && heading.classList.contains('topic-name-hidden')
-        && heading.querySelectorAll('.pixel-char').length === 0;
+      const name = document.querySelector('.active-topic .topic-heading-name');
+      return name && name.classList.contains('topic-name-hidden')
+        && name.querySelectorAll('.pixel-char').length === 0;
     });
     await titleSyncPage.getByRole('button', { name: 'Reveal title' }).click();
-    await page.waitForFunction(() => !document.querySelector('.active-topic .topic-heading').classList.contains('topic-name-hidden'));
+    await page.waitForFunction(() => !document.querySelector('.active-topic .topic-heading-name').classList.contains('topic-name-hidden'));
     await titleSyncPage.close();
 
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.active-topic .topic-heading.topic-name-hidden').count(), 0);
+    assert.equal(await page.locator('.active-topic .topic-heading-name.topic-name-hidden').count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Hide title' }).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
     const activeHeadingTypography = await page.locator('.active-topic .topic-heading').evaluate((element) => ({
       fontSize: getComputedStyle(element).fontSize,
       letterSpacing: getComputedStyle(element).letterSpacing,
-      lineHeight: getComputedStyle(element).lineHeight
+      lineHeight: getComputedStyle(element).lineHeight,
+      transform: getComputedStyle(element).transform
     }));
+    const titleOpticalShift = Number(activeHeadingTypography.transform.split(',').at(-1).replace(')', ''));
+    const [activeTitleBox, activeEyeBox] = await Promise.all([
+      page.locator('.active-topic .topic-heading').boundingBox(),
+      page.locator('.active-topic .topic-title-reveal').boundingBox()
+    ]);
+    assert.ok(titleOpticalShift > 1);
+    assert.ok(Math.abs(
+      (activeTitleBox.y + (activeTitleBox.height / 2) - titleOpticalShift)
+      - (activeEyeBox.y + (activeEyeBox.height / 2))
+    ) < 1);
     const workSection = page.locator('.active-topic').filter({ hasText: 'The Work' });
     const cards = workSection.locator('.tablet-grid .riddle-tablet');
     assert.equal(await cards.count(), 2);
@@ -381,7 +410,8 @@ test('topic creation, submission, moderation, presentation, and local group comp
       await page.locator('.solved-topic .topic-heading').evaluate((element) => ({
         fontSize: getComputedStyle(element).fontSize,
         letterSpacing: getComputedStyle(element).letterSpacing,
-        lineHeight: getComputedStyle(element).lineHeight
+        lineHeight: getComputedStyle(element).lineHeight,
+        transform: getComputedStyle(element).transform
       })),
       activeHeadingTypography
     );
@@ -393,7 +423,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
       page.locator('.solved-topic-menu-toggle').boundingBox()
     ]);
     assert.ok(Math.abs(
-      (solvedLabelBox.y + (solvedLabelBox.height / 2))
+      (solvedLabelBox.y + (solvedLabelBox.height / 2) - titleOpticalShift)
       - (solvedMenuButtonBox.y + (solvedMenuButtonBox.height / 2))
     ) < 1);
     assert.equal(await page.locator('#active-topics').isVisible(), false);
@@ -461,7 +491,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await freshPage.locator('.active-topic .tablet-grid .riddle-tablet').first().getAttribute('aria-expanded'), 'false');
     await freshContext.close();
 
-    const nextGroup = await groupRepository.create({ topic: 'The Moon' });
+    const nextGroup = await groupRepository.create({ topic: 'The Moon', sideQuest: true });
     await tabletRepository.save({
       groupId: nextGroup.id,
       topic: nextGroup.topic,
@@ -472,6 +502,42 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await groupRepository.setStatus(nextGroup.id, 'active');
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Moon');
+    assert.equal(await page.locator('.active-topic .topic-heading-prefix').textContent(), 'Side Quest:');
+    assert.match(
+      await page.locator('.active-topic .topic-heading-prefix').evaluate((element) => getComputedStyle(element).fontFamily),
+      /NoitaPixel/
+    );
+    assert.match(
+      await page.locator('.active-topic .topic-heading-name').evaluate((element) => getComputedStyle(element).fontFamily),
+      /NoitaGlyph/
+    );
+    const mixedTitleTypography = await page.locator('.active-topic .topic-heading-stack').evaluate((stack) => {
+      const heading = stack.querySelector('.topic-heading');
+      const prefix = stack.querySelector('.topic-heading-prefix');
+      const name = heading.querySelector('.topic-heading-name');
+      const glyph = name.querySelector('.glyph-char');
+      const headingStyle = getComputedStyle(heading);
+      const prefixStyle = getComputedStyle(prefix);
+      const glyphTransform = getComputedStyle(glyph).transform;
+      const prefixBox = prefix.getBoundingClientRect();
+      const headingBox = heading.getBoundingClientRect();
+      return {
+        lineHeightRatio: Number.parseFloat(headingStyle.lineHeight) / Number.parseFloat(headingStyle.fontSize),
+        prefixPosition: getComputedStyle(prefix).position,
+        prefixSizeRatio: Number.parseFloat(prefixStyle.fontSize) / Number.parseFloat(headingStyle.fontSize),
+        lineGap: headingBox.top - prefixBox.bottom,
+        nameColor: headingStyle.color,
+        glyphShift: Number(glyphTransform.split(',').at(-1).replace(')', '')),
+        glyphCount: name.querySelectorAll('.glyph-char').length
+      };
+    });
+    assert.ok(Math.abs(mixedTitleTypography.lineHeightRatio - 1.25) < 0.01);
+    assert.equal(mixedTitleTypography.prefixPosition, 'static');
+    assert.ok(mixedTitleTypography.prefixSizeRatio < 0.75);
+    assert.ok(mixedTitleTypography.lineGap > 0);
+    assert.match(mixedTitleTypography.nameColor, /170, 166, 178/);
+    assert.ok(mixedTitleTypography.glyphShift < -2);
+    assert.ok(mixedTitleTypography.glyphCount > 0);
     assert.equal(await page.locator('.solved-topic').count(), 1);
     assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
     assert.equal(await page.getByRole('link', { name: 'Past topics' }).count(), 0);
@@ -546,7 +612,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await solvedAfterCompletionPage.locator('#waiting-state').isVisible(), true);
     assert.deepEqual(
       (await solvedAfterCompletionPage.locator('.solved-topic .topic-heading').allTextContents()).sort(),
-      ['Solved: The Moon', 'Solved: The Work'].sort()
+      ['Solved: Side Quest: The Moon', 'Solved: The Work'].sort()
     );
     await solvedAfterCompletionPage.close();
 
@@ -599,7 +665,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
       ['Audience Preview', 'The Moon', 'The Work'].sort()
     );
     assert.equal(await page.locator('#hide-riddle-names').count(), 0);
-    assert.equal(await page.locator('.archive-topic-name.topic-name-hidden').count(), 2);
+    assert.equal(await page.locator('.archive-topic-name .topic-heading-name.topic-name-hidden').count(), 2);
     assert.equal(await page.locator('.archive-topic .topic-title-reveal').count(), 3);
     assert.equal(await page.getByRole('button', { name: 'Hide title' }).count(), 1);
     assert.equal(await page.getByRole('button', { name: 'Reveal title' }).count(), 2);
@@ -608,24 +674,24 @@ test('topic creation, submission, moderation, presentation, and local group comp
     const audienceTitleReveal = audienceArchiveSection.getByRole('button', { name: 'Reveal title' });
     assert.equal(await audienceTitle.getAttribute('aria-label'), 'Riddle name hidden');
     assert.match(
-      await audienceTitle.evaluate((heading) => getComputedStyle(heading).fontFamily),
+      await audienceTitle.locator('.topic-heading-name').evaluate((name) => getComputedStyle(name).fontFamily),
       /NoitaGlyph/
     );
 
     await audienceTitleReveal.click();
     await page.waitForFunction((groupId) => {
-      const heading = document.querySelector(`.archive-topic[data-group-id="${groupId}"] .archive-topic-name`);
-      return heading && !heading.classList.contains('topic-name-hidden')
-        && heading.querySelectorAll('.glyph-char').length === 0;
+      const name = document.querySelector(`.archive-topic[data-group-id="${groupId}"] .topic-heading-name`);
+      return name && !name.classList.contains('topic-name-hidden')
+        && name.querySelectorAll('.glyph-char').length === 0;
     }, audienceGroup.id);
     await page.reload({ waitUntil: 'domcontentloaded' });
     const persistedAudienceSection = page.locator(`.archive-topic[data-group-id="${audienceGroup.id}"]`);
-    assert.equal(await persistedAudienceSection.locator('.archive-topic-name.topic-name-hidden').count(), 0);
+    assert.equal(await persistedAudienceSection.locator('.topic-heading-name.topic-name-hidden').count(), 0);
     await persistedAudienceSection.getByRole('button', { name: 'Hide title' }).click();
     await page.waitForFunction((groupId) => {
-      const heading = document.querySelector(`.archive-topic[data-group-id="${groupId}"] .archive-topic-name`);
-      return heading && heading.classList.contains('topic-name-hidden')
-        && heading.querySelectorAll('.pixel-char').length === 0;
+      const name = document.querySelector(`.archive-topic[data-group-id="${groupId}"] .topic-heading-name`);
+      return name && name.classList.contains('topic-name-hidden')
+        && name.querySelectorAll('.pixel-char').length === 0;
     }, audienceGroup.id);
     assert.equal(await page.locator('.archive-topic .riddle-tablet').count(), 6);
     const audienceArchiveGrid = page.locator(`.archive-topic[data-group-id="${audienceGroup.id}"] .tablet-grid`);
@@ -753,7 +819,7 @@ test('multi-step quests unlock in order, complete on the final step, and reset l
   const groupRepository = new MemoryGroupRepository();
   const tabletRepository = new MemoryTabletRepository();
   const submissionRepository = new MemorySubmissionRepository();
-  const group = await groupRepository.create({ topic: 'The Fourfold Trial', multiStep: true });
+  const group = await groupRepository.create({ topic: 'The Fourfold Trial', multiStep: true, sideQuest: true });
   for (let index = 0; index < 4; index += 1) {
     await tabletRepository.save({
       groupId: group.id,
@@ -784,7 +850,17 @@ test('multi-step quests unlock in order, complete on the final step, and reset l
     const origin = `http://127.0.0.1:${server.address().port}`;
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
 
-    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'Multi-step: The Fourfold Trial');
+    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Fourfold Trial');
+    assert.equal(await page.locator('.active-topic .topic-heading-prefix').textContent(), 'Side Quest · Multi-step:');
+    assert.equal(await page.locator('.active-topic .topic-heading-name.topic-name-hidden').count(), 1);
+    assert.match(
+      await page.locator('.active-topic .topic-heading-prefix').evaluate((element) => getComputedStyle(element).fontFamily),
+      /NoitaPixel/
+    );
+    assert.match(
+      await page.locator('.active-topic .topic-heading-name').evaluate((element) => getComputedStyle(element).fontFamily),
+      /NoitaGlyph/
+    );
     assert.equal(await page.locator('.quest-step').count(), 4);
     assert.equal(await page.locator('.quest-step-current').count(), 1);
     assert.equal(await page.locator('.quest-step-locked').count(), 3);
@@ -829,7 +905,7 @@ test('multi-step quests unlock in order, complete on the final step, and reset l
     await page.locator('#completion-close').click();
     await page.locator('#completion-celebration').waitFor({ state: 'hidden' });
 
-    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: Multi-step: The Fourfold Trial');
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: Side Quest · Multi-step: The Fourfold Trial');
     await page.locator('.solved-topic-menu-toggle').click();
     await page.getByRole('menuitem', { name: 'Remove from Solved' }).click();
     await page.waitForFunction(() => document.querySelectorAll('.quest-step-current').length === 1);

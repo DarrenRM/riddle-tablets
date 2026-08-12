@@ -115,6 +115,7 @@ function publicGroup(group) {
   if (!group) return null;
   const { submissionToken, completedAt, ...safe } = group;
   safe.multiStep = Boolean(group.multiStep);
+  safe.sideQuest = Boolean(group.sideQuest);
   safe.questRevision = Math.max(0, Math.trunc(Number(group.questRevision) || 0));
   // Treat legacy completed records as archived even before their persisted
   // status is repaired. Public consumers must never see active + completed.
@@ -424,7 +425,8 @@ function createApp(options = {}) {
     try {
       const group = await groups.create({
         topic: req.body && req.body.topic,
-        multiStep: Boolean(req.body && req.body.multiStep)
+        multiStep: Boolean(req.body && req.body.multiStep),
+        sideQuest: Boolean(req.body && req.body.sideQuest)
       });
       res.status(201).json({ group: await groupSummary(group) });
     } catch (error) {
@@ -443,6 +445,13 @@ function createApp(options = {}) {
           throw httpError('group_conflict', 'Deactivate this topic before changing Multi-step Quest.', 409);
         }
         updates.multiStep = multiStep;
+      }
+      if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'sideQuest')) {
+        const sideQuest = Boolean(req.body.sideQuest);
+        if (previous.status === 'active' && sideQuest !== Boolean(previous.sideQuest)) {
+          throw httpError('group_conflict', 'Deactivate this topic before changing Side Quest.', 409);
+        }
+        updates.sideQuest = sideQuest;
       }
       const group = await groups.update(req.params.id, updates);
       const [tablets, pending, rejected] = await Promise.all([

@@ -18,7 +18,7 @@ import {
     setTopicNameRevealed,
     setTabletRevealed
 } from './tablet-store.js';
-import { concealText, flickerGlyphText, inscribeText } from './tablet-reveal.js';
+import { concealText, flickerGlyphText, inscribeText, renderGlyphText } from './tablet-reveal.js?v=2';
 
 document.addEventListener('DOMContentLoaded', () => {
     const waiting = document.getElementById('waiting-state');
@@ -522,21 +522,45 @@ document.addEventListener('DOMContentLoaded', () => {
         return card;
     }
 
+    function topicPrefixLabel(group) {
+        if (group && group.sideQuest && group.multiStep) return 'Side Quest · Multi-step:';
+        if (group && group.sideQuest) return 'Side Quest:';
+        if (group && group.multiStep) return 'Multi-step:';
+        return '';
+    }
+
+    function displayTopicPrefix(group) {
+        const label = topicPrefixLabel(group);
+        return label ? `${label} ` : '';
+    }
+
     function displayTopic(group) {
-        return group && group.multiStep ? `Multi-step: ${group.topic}` : group.topic;
+        return `${displayTopicPrefix(group)}${group.topic}`;
+    }
+
+    function prepareTopicHeading(heading, group) {
+        const prefixLabel = topicPrefixLabel(group);
+        const name = document.createElement('span');
+        name.className = 'topic-heading-name';
+        name.textContent = group.topic;
+        heading.dataset.topicName = group.topic;
+        heading.dataset.topicPrefixLabel = prefixLabel;
+        heading.dataset.topicPrefix = prefixLabel ? `${prefixLabel} ` : '';
+        heading.replaceChildren(name);
     }
 
     function renderTopicHeadingName(heading, revealButton, revealed, animate = false) {
         const topicName = heading.dataset.topicName || '';
-        heading.classList.toggle('topic-name-hidden', !revealed);
+        const topicNameElement = heading.querySelector('.topic-heading-name') || heading;
+        topicNameElement.classList.toggle('topic-name-hidden', !revealed);
         if (revealed) {
-            heading.setAttribute('aria-label', topicName);
-            if (animate) inscribeText(heading, topicName, { duration: 1200 });
-            else heading.textContent = topicName;
+            heading.setAttribute('aria-label', `${heading.dataset.topicPrefix || ''}${topicName}`);
+            if (animate) inscribeText(topicNameElement, topicName, { duration: 1200 });
+            else topicNameElement.textContent = topicName;
         } else {
-            heading.setAttribute('aria-label', 'Riddle name hidden');
-            if (animate) concealText(heading, topicName, { duration: 900 });
-            else heading.textContent = topicName;
+            heading.setAttribute('aria-label', `${heading.dataset.topicPrefix || ''}Riddle name hidden`);
+            if (animate) concealText(topicNameElement, topicName, { duration: 900 });
+            else renderGlyphText(topicNameElement, topicName);
         }
         if (!revealButton) return;
         revealButton.setAttribute('aria-pressed', String(revealed));
@@ -545,12 +569,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createTopicHeadingRow(heading, group, { interactive = true } = {}) {
+        const stack = document.createElement('div');
+        stack.className = 'topic-heading-stack';
+        const prefixLabel = heading.dataset.topicPrefixLabel || '';
+        if (prefixLabel) {
+            const prefix = document.createElement('div');
+            prefix.className = 'topic-heading-prefix';
+            prefix.setAttribute('aria-hidden', 'true');
+            prefix.textContent = prefixLabel;
+            stack.appendChild(prefix);
+        }
         const row = document.createElement('div');
         row.className = 'topic-heading-row';
         if (!interactive) {
             renderTopicHeadingName(heading, null, true);
             row.appendChild(heading);
-            return row;
+            stack.appendChild(row);
+            return stack;
         }
 
         const revealButton = document.createElement('button');
@@ -582,7 +617,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         row.append(heading, revealButton);
-        return row;
+        stack.appendChild(row);
+        return stack;
     }
 
     function syncRenderedTopicTitles() {
@@ -604,8 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const heading = document.createElement('h1');
         heading.id = `active-topic-heading-${group.id}`;
         heading.className = 'topic-heading';
-        heading.dataset.topicName = displayTopic(group);
-        heading.textContent = heading.dataset.topicName;
+        prepareTopicHeading(heading, group);
         const headingRow = createTopicHeadingRow(heading, group, { interactive: mode !== 'preview' });
 
         const topicGrid = document.createElement('div');
@@ -851,7 +886,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const heading = document.createElement('h2');
                 heading.className = 'topic-heading archive-topic-name';
-                heading.dataset.topicName = displayTopic(presentation.group);
+                prepareTopicHeading(heading, presentation.group);
                 heading.id = `archive-topic-heading-${presentation.group.id}`;
                 section.setAttribute('aria-labelledby', heading.id);
                 const headingRow = createTopicHeadingRow(heading, presentation.group);
@@ -884,6 +919,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 presentation.group.updatedAt,
                 presentation.group.status,
                 Boolean(presentation.group.multiStep),
+                Boolean(presentation.group.sideQuest),
                 Math.max(0, Math.trunc(Number(presentation.group.questRevision) || 0))
             ],
             tablets: (presentation.tablets || []).map((tablet) => [tablet.id, tablet.updatedAt, tablet.position])

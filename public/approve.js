@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const workspaceEmpty = document.getElementById('group-empty');
     const topicInput = document.getElementById('group-topic-input');
     const multiStepInput = document.getElementById('group-multi-step');
+    const sideQuestInput = document.getElementById('group-side-quest');
     const saveSettingsButton = document.getElementById('save-group-topic');
     const submissionLink = document.getElementById('group-submission-link');
     const toggleSubmissions = document.getElementById('toggle-group-submissions');
@@ -23,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const createError = document.getElementById('create-group-error');
     const newTopic = document.getElementById('new-group-topic');
     const newGroupMultiStep = document.getElementById('new-group-multi-step');
+    const newGroupSideQuest = document.getElementById('new-group-side-quest');
     const createdTopic = document.getElementById('created-group-topic');
     const createdLink = document.getElementById('created-group-link');
     const deleteButton = document.getElementById('delete-group');
@@ -152,18 +154,15 @@ document.addEventListener('DOMContentLoaded', () => {
         topicInput.value = group.topic;
         topicInput.disabled = settingsSaveInFlight;
         multiStepInput.checked = Boolean(group.multiStep);
+        sideQuestInput.checked = Boolean(group.sideQuest);
         multiStepInput.disabled = settingsSaveInFlight || group.status === 'active';
-        const multiStepToggle = multiStepInput.closest('.group-setting-toggle');
-        const multiStepDisabledReason = group.status === 'active'
+        sideQuestInput.disabled = settingsSaveInFlight || group.status === 'active';
+        configureSettingToggle(multiStepInput, group.status === 'active'
             ? 'Deactivate this topic before changing Multi-step Quest.'
-            : (settingsSaveInFlight ? 'Saving Multi-step Quest…' : '');
-        if (multiStepDisabledReason) {
-            multiStepToggle.dataset.tooltip = multiStepDisabledReason;
-            multiStepToggle.tabIndex = 0;
-        } else {
-            delete multiStepToggle.dataset.tooltip;
-            multiStepToggle.removeAttribute('tabindex');
-        }
+            : (settingsSaveInFlight ? 'Saving riddle settings…' : ''));
+        configureSettingToggle(sideQuestInput, group.status === 'active'
+            ? 'Deactivate this topic before changing Side Quest.'
+            : (settingsSaveInFlight ? 'Saving riddle settings…' : ''));
         saveSettingsButton.disabled = settingsSaveInFlight;
 
         const url = submissionUrl(group);
@@ -180,6 +179,17 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleCompletion.textContent = group.completedAt ? 'Mark incomplete' : 'Mark complete';
         toggleCompletion.disabled = settingsSaveInFlight;
         deleteButton.disabled = settingsSaveInFlight;
+    }
+
+    function configureSettingToggle(input, disabledReason) {
+        const toggle = input.closest('.group-setting-toggle');
+        if (disabledReason) {
+            toggle.dataset.tooltip = disabledReason;
+            toggle.tabIndex = 0;
+        } else {
+            delete toggle.dataset.tooltip;
+            toggle.removeAttribute('tabindex');
+        }
     }
 
     function fieldsFrom(row) {
@@ -404,7 +414,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await request('/api/moderation/groups', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: newTopic.value, multiStep: newGroupMultiStep.checked })
+                body: JSON.stringify({
+                    topic: newTopic.value,
+                    multiStep: newGroupMultiStep.checked,
+                    sideQuest: newGroupSideQuest.checked
+                })
             });
             selectedGroupId = result.group.id;
             const url = submissionUrl(result.group);
@@ -424,18 +438,18 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('copy-created-group-link').addEventListener('click', (event) => copyText(createdLink.textContent, event.currentTarget));
     document.getElementById('copy-group-link').addEventListener('click', (event) => copyText(submissionLink.textContent, event.currentTarget));
 
-    multiStepInput.addEventListener('change', async () => {
+    async function autosaveGroupFlag(input, property, label) {
         const group = selectedGroup();
         if (!group || group.status === 'active' || settingsSaveInFlight) {
-            if (group) multiStepInput.checked = Boolean(group.multiStep);
+            if (group) input.checked = Boolean(group[property]);
             return;
         }
 
         const groupId = group.id;
-        const previousValue = Boolean(group.multiStep);
-        const nextValue = multiStepInput.checked;
+        const previousValue = Boolean(group[property]);
+        const nextValue = input.checked;
         const pendingTopicValue = topicInput.value;
-        group.multiStep = nextValue;
+        group[property] = nextValue;
         settingsSaveInFlight = true;
         renderGroupHeader();
         topicInput.value = pendingTopicValue;
@@ -444,12 +458,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await request(`/api/moderation/groups/${groupId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: group.topic, multiStep: nextValue })
+                body: JSON.stringify({ topic: group.topic, [property]: nextValue })
             });
             Object.assign(group, result.group);
-            showToast(`Multi-step Quest ${nextValue ? 'enabled' : 'disabled'}.`);
+            showToast(`${label} ${nextValue ? 'enabled' : 'disabled'}.`);
         } catch (error) {
-            group.multiStep = previousValue;
+            group[property] = previousValue;
             saveError = error.message;
         } finally {
             settingsSaveInFlight = false;
@@ -457,7 +471,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (selectedGroupId === groupId) topicInput.value = pendingTopicValue;
             if (saveError) status.textContent = saveError;
         }
-    });
+    }
+
+    multiStepInput.addEventListener('change', () => autosaveGroupFlag(multiStepInput, 'multiStep', 'Multi-step Quest'));
+    sideQuestInput.addEventListener('change', () => autosaveGroupFlag(sideQuestInput, 'sideQuest', 'Side Quest'));
 
     saveSettingsButton.addEventListener('click', async () => {
         if (settingsSaveInFlight) return;
@@ -465,7 +482,11 @@ document.addEventListener('DOMContentLoaded', () => {
             await request(`/api/moderation/groups/${selectedGroupId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ topic: topicInput.value, multiStep: multiStepInput.checked })
+                body: JSON.stringify({
+                    topic: topicInput.value,
+                    multiStep: multiStepInput.checked,
+                    sideQuest: sideQuestInput.checked
+                })
             });
             showToast('Riddle settings updated.');
             await refreshAll();

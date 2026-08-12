@@ -152,8 +152,9 @@ test('multi-step quest settings persist and require at least two approved steps'
   const app = createTestApp();
   const cookie = await moderatorCookie(app);
   const headers = { Cookie: cookie };
-  const group = await createGroup(app, headers, 'The Fourfold Trial', { multiStep: true });
+  const group = await createGroup(app, headers, 'The Fourfold Trial', { multiStep: true, sideQuest: true });
   assert.equal(group.multiStep, true);
+  assert.equal(group.sideQuest, true);
   assert.equal(group.questRevision, 1);
 
   const firstSubmission = await submitClue(app, group, 'First Scribe', 'The first seal waits.');
@@ -181,8 +182,10 @@ test('multi-step quest settings persist and require at least two approved steps'
   const activated = await request(app, 'POST', `/api/moderation/groups/${group.id}/activate`, undefined, headers);
   assert.equal(activated.status, 200);
   assert.equal(activated.body.group.multiStep, true);
+  assert.equal(activated.body.group.sideQuest, true);
   const presentation = await request(app, 'GET', '/api/presentation');
   assert.equal(presentation.body.group.multiStep, true);
+  assert.equal(presentation.body.group.sideQuest, true);
   assert.equal(presentation.body.group.questRevision, 1);
   assert.deepEqual(presentation.body.tablets.map((tablet) => tablet.author), ['First Scribe', 'Second Scribe']);
 
@@ -206,11 +209,17 @@ test('multi-step quest settings persist and require at least two approved steps'
     topic: 'The Renamed Trial'
   }, headers);
   assert.equal(renamedWithoutFlag.body.group.multiStep, true);
+  assert.equal(renamedWithoutFlag.body.group.sideQuest, true);
   const disabledWhileActive = await request(app, 'PUT', `/api/moderation/groups/${group.id}`, {
     topic: 'The Renamed Trial',
     multiStep: false
   }, headers);
   assert.equal(disabledWhileActive.status, 409);
+  const sideQuestWhileActive = await request(app, 'PUT', `/api/moderation/groups/${group.id}`, {
+    topic: 'The Renamed Trial',
+    sideQuest: false
+  }, headers);
+  assert.equal(sideQuestWhileActive.status, 409);
 
   assert.equal((await request(app, 'POST', `/api/moderation/groups/${group.id}/deactivate`, undefined, headers)).status, 200);
   const disabled = await request(app, 'PUT', `/api/moderation/groups/${group.id}`, {
@@ -218,6 +227,7 @@ test('multi-step quest settings persist and require at least two approved steps'
     multiStep: false
   }, headers);
   assert.equal(disabled.body.group.multiStep, false);
+  assert.equal(disabled.body.group.sideQuest, true);
   assert.equal(disabled.body.group.questRevision, 1);
   const reenabled = await request(app, 'PUT', `/api/moderation/groups/${group.id}`, {
     topic: 'The Renamed Trial',
@@ -225,6 +235,11 @@ test('multi-step quest settings persist and require at least two approved steps'
   }, headers);
   assert.equal(reenabled.body.group.multiStep, true);
   assert.equal(reenabled.body.group.questRevision, 2);
+  const disabledSideQuest = await request(app, 'PUT', `/api/moderation/groups/${group.id}`, {
+    topic: 'The Renamed Trial',
+    sideQuest: false
+  }, headers);
+  assert.equal(disabledSideQuest.body.group.sideQuest, false);
 
   assert.equal((await request(app, 'PUT', `/api/moderation/groups/${group.id}/tablet-order`, {
     ids: [...approvedIds].reverse()

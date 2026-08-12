@@ -26,6 +26,14 @@
     --green: rgb(71, 226, 136);
     --gold: #f0c040;
     --border: #303040;
+    /*
+     * NoitaPixel capitals occupy 0..0.799em around the baseline, while
+     * NoitaGlyph occupies -0.188..0.562em. Align their visible centers once
+     * here so every descramble animation uses the same optical baseline.
+     */
+    --noita-glyph-optical-shift: -0.212em;
+    /* Center NoitaPixel's visible capitals inside their shared title row. */
+    --noita-title-optical-shift: 0.095em;
 }
 
 * {
@@ -632,11 +640,15 @@ button:disabled {
 }
 
 .glyph-char {
+    display: inline-block;
     font-family: 'NoitaGlyph', monospace;
+    transform: translateY(var(--noita-glyph-optical-shift));
 }
 
 .pixel-char {
+    display: inline-block;
     font-family: 'NoitaPixel', monospace;
+    transform: translateY(0);
 }
 
 .archive-empty {
@@ -1145,15 +1157,21 @@ textarea {
 }
 
 .topic-heading {
-    margin: 0 0 2rem;
-    color: #8e8999;
+    margin: 0;
+    color: #aaa6b2;
     font-family: 'NoitaPixel', monospace;
     font-size: clamp(0.9rem, 2vw, 1.15rem);
     font-weight: normal;
     letter-spacing: 0.14em;
+    line-height: 1.25;
     overflow-wrap: anywhere;
     text-align: center;
     text-transform: uppercase;
+    transform: translateY(var(--noita-title-optical-shift));
+}
+
+.topic-heading-stack {
+    margin-bottom: 2rem;
 }
 
 .topic-heading-row {
@@ -1162,7 +1180,6 @@ textarea {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    margin-bottom: 2rem;
 }
 
 .topic-heading-row .topic-heading {
@@ -1176,7 +1193,20 @@ textarea {
     margin-left: 0.5rem;
 }
 
-.topic-name-hidden {
+.topic-heading-prefix {
+    margin-bottom: 0.4rem;
+    color: #817c8b;
+    font-family: 'NoitaPixel', monospace;
+    font-size: clamp(0.62rem, 1.35vw, 0.76rem);
+    font-weight: normal;
+    letter-spacing: 0.12em;
+    line-height: 1.25;
+    text-align: center;
+    text-transform: uppercase;
+    transform: translateY(var(--noita-title-optical-shift));
+}
+
+.topic-heading-name.topic-name-hidden {
     font-family: 'NoitaGlyph', monospace;
 }
 

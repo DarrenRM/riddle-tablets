@@ -52,6 +52,11 @@ function buildGlyphText(element, text) {
     return spans;
 }
 
+export function renderGlyphText(element, text) {
+    const spans = buildGlyphText(element, text);
+    spans.forEach((span) => { span.className = 'glyph-char'; });
+}
+
 export function inscribeText(element, text, { delay = 0, duration = 1500 } = {}) {
     const spans = buildGlyphText(element, text);
     const order = createRevealOrder(text);
