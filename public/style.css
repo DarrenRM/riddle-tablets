@@ -1228,7 +1228,11 @@ textarea {
     outline-offset: 2px;
 }
 
-.topic-title-reveal::after {
+.custom-tooltip {
+    position: relative;
+}
+
+.custom-tooltip[data-tooltip]::after {
     position: absolute;
     z-index: 30;
     top: calc(100% + 0.45rem);
@@ -1252,10 +1256,28 @@ textarea {
     white-space: nowrap;
 }
 
-.topic-title-reveal:hover::after,
-.topic-title-reveal:focus-visible::after {
+.custom-tooltip[data-tooltip]:hover::after,
+.custom-tooltip[data-tooltip]:focus-visible::after {
     transform: translate(-50%, 0);
     opacity: 1;
+}
+
+.custom-tooltip.tooltip-above[data-tooltip]::after {
+    top: auto;
+    bottom: calc(100% + 0.45rem);
+    transform: translate(-50%, 0.2rem);
+}
+
+.custom-tooltip.tooltip-above[data-tooltip]:hover::after,
+.custom-tooltip.tooltip-above[data-tooltip]:focus-visible::after {
+    transform: translate(-50%, 0);
+}
+
+.group-setting-toggle.custom-tooltip[data-tooltip]::after {
+    width: max-content;
+    max-width: min(24rem, calc(100vw - 2rem));
+    text-align: center;
+    white-space: normal;
 }
 
 .riddle-topic.riddle-author-name {
@@ -1795,6 +1817,10 @@ textarea {
 
 .group-setting-toggle:has(input:disabled) {
     cursor: not-allowed;
+}
+
+.group-setting-toggle:has(input:disabled) > input,
+.group-setting-toggle:has(input:disabled) > span {
     opacity: 0.58;
 }
 

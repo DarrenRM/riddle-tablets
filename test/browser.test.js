@@ -102,6 +102,9 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('#open-created-group-form').count(), 0);
     const submissionUrl = await page.locator('#created-group-link').textContent();
     assert.match(submissionUrl, new RegExp(`^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/submit/[A-Za-z0-9_-]+$`));
+    const createdCopyButton = page.locator('#copy-created-group-link');
+    assert.equal(await createdCopyButton.getAttribute('data-tooltip'), 'Copy submission link');
+    assert.equal(await createdCopyButton.getAttribute('title'), null);
     await page.locator('#create-group-success').getByRole('button', { name: 'Done' }).click();
     assert.equal(await page.locator('.group-list-item').count(), 1);
     const [sidebarBox, topicNameSize] = await Promise.all([
@@ -125,6 +128,23 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.ok(controlsBox.y >= linkBox.y + linkBox.height);
     assert.equal(await page.locator('.group-link-panel input').count(), 0);
     assert.equal(await page.locator('#delete-group').getAttribute('aria-label'), 'Delete topic');
+    assert.equal(await page.locator('#delete-group').getAttribute('data-tooltip'), 'Delete topic');
+    assert.equal(await page.locator('#delete-group').getAttribute('title'), null);
+    assert.equal(await page.locator('#copy-group-link').getAttribute('data-tooltip'), 'Copy submission link');
+    assert.equal(await page.locator('#copy-group-link').getAttribute('title'), null);
+    assert.equal(await page.locator('label[for="group-multi-step"]').getAttribute('data-tooltip'), null);
+    await page.locator('#copy-group-link').hover();
+    await page.waitForTimeout(180);
+    assert.equal(
+      await page.locator('#copy-group-link').evaluate((element) => getComputedStyle(element, '::after').opacity),
+      '1'
+    );
+    await page.locator('#delete-group').hover();
+    await page.waitForTimeout(180);
+    assert.equal(
+      await page.locator('#delete-group').evaluate((element) => getComputedStyle(element, '::after').opacity),
+      '1'
+    );
     assert.equal(await page.locator('#delete-group svg').count(), 1);
     const [linkValueBox, copyButtonBox, copyIconBox, deleteIconBox] = await Promise.all([
       page.locator('#group-submission-link').boundingBox(),
@@ -194,6 +214,10 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('#group-multi-step').check();
     assert.equal(await page.locator('#save-group-topic').isDisabled(), true);
     assert.equal(await page.locator('#activate-group').isDisabled(), true);
+    assert.match(
+      await page.locator('label[for="group-multi-step"]').getAttribute('data-tooltip'),
+      /^Saving Multi-step Quest/
+    );
     await page.waitForFunction(() => document.querySelector('.moderation-meta')?.textContent.includes('Step 1'));
     assert.equal(await page.locator('#group-topic-input').evaluate((element) => element.value), 'An unsaved topic title');
     assert.equal(await page.locator('#save-group-topic').isEnabled(), true);
@@ -238,6 +262,23 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('#activate-group').click();
     await page.waitForFunction(() => document.querySelector('#activate-group').textContent === 'Deactivate');
     assert.equal(await page.locator('#group-multi-step').isEnabled(), false);
+    const disabledMultiStepToggle = page.locator('label[for="group-multi-step"]');
+    assert.equal(
+      await disabledMultiStepToggle.getAttribute('data-tooltip'),
+      'Deactivate this topic before changing Multi-step Quest.'
+    );
+    assert.equal(await disabledMultiStepToggle.getAttribute('tabindex'), '0');
+    assert.equal(await disabledMultiStepToggle.evaluate((element) => getComputedStyle(element).opacity), '1');
+    assert.equal(
+      await disabledMultiStepToggle.locator('span').evaluate((element) => getComputedStyle(element).opacity),
+      '0.58'
+    );
+    await disabledMultiStepToggle.hover();
+    await page.waitForTimeout(180);
+    assert.equal(
+      await disabledMultiStepToggle.evaluate((element) => getComputedStyle(element, '::after').opacity),
+      '1'
+    );
     await page.locator('#delete-group').click();
     await page.locator('#delete-group-dialog').waitFor({ state: 'visible' });
     assert.match(await page.locator('#delete-group-warning').textContent(), /currently live/i);

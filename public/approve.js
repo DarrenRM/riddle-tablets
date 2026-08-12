@@ -78,13 +78,14 @@ document.addEventListener('DOMContentLoaded', () => {
             helper.remove();
         }
         const originalLabel = button.getAttribute('aria-label') || 'Copy link';
+        const originalTooltip = button.dataset.tooltip || originalLabel;
         button.setAttribute('aria-label', 'Copied');
-        button.title = 'Copied';
+        button.dataset.tooltip = 'Copied!';
         button.classList.add('copied');
         showToast('Submission link copied.');
         window.setTimeout(() => {
             button.setAttribute('aria-label', originalLabel);
-            button.title = originalLabel;
+            button.dataset.tooltip = originalTooltip;
             button.classList.remove('copied');
         }, 1500);
     }
@@ -152,9 +153,17 @@ document.addEventListener('DOMContentLoaded', () => {
         topicInput.disabled = settingsSaveInFlight;
         multiStepInput.checked = Boolean(group.multiStep);
         multiStepInput.disabled = settingsSaveInFlight || group.status === 'active';
-        multiStepInput.closest('.group-setting-toggle').title = group.status === 'active'
+        const multiStepToggle = multiStepInput.closest('.group-setting-toggle');
+        const multiStepDisabledReason = group.status === 'active'
             ? 'Deactivate this topic before changing Multi-step Quest.'
             : (settingsSaveInFlight ? 'Saving Multi-step Quest…' : '');
+        if (multiStepDisabledReason) {
+            multiStepToggle.dataset.tooltip = multiStepDisabledReason;
+            multiStepToggle.tabIndex = 0;
+        } else {
+            delete multiStepToggle.dataset.tooltip;
+            multiStepToggle.removeAttribute('tabindex');
+        }
         saveSettingsButton.disabled = settingsSaveInFlight;
 
         const url = submissionUrl(group);

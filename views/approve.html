@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Riddle Review</title>
     <link rel="icon" type="image/png" href="/images/emerald_tablet.png">
-    <link rel="stylesheet" href="/style.css?v=48">
+    <link rel="stylesheet" href="/style.css?v=54">
 </head>
 <body class="approve-page">
     <div class="approve-container group-approve-container">
@@ -54,7 +54,7 @@
                                 <input id="group-topic-input" type="text" maxlength="120" required>
                                 <button id="save-group-topic" type="button">Save settings</button>
                             </div>
-                            <label class="group-setting-toggle" for="group-multi-step">
+                            <label class="group-setting-toggle custom-tooltip" for="group-multi-step">
                                 <input id="group-multi-step" type="checkbox">
                                 <span>
                                     <strong>Multi-step Quest</strong>
@@ -67,7 +67,7 @@
                             <span class="group-copy-label">Submission link</span>
                             <div class="group-link-row">
                                 <code id="group-submission-link" class="group-link-value" tabindex="0"></code>
-                                <button id="copy-group-link" type="button" class="icon-button copy-icon-button" aria-label="Copy submission link" title="Copy submission link">
+                                <button id="copy-group-link" type="button" class="icon-button copy-icon-button custom-tooltip tooltip-above" aria-label="Copy submission link" data-tooltip="Copy submission link">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2m-9-9h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3Z"/></svg>
                                 </button>
                             </div>
@@ -77,7 +77,7 @@
                             <button id="toggle-group-submissions" type="button"></button>
                             <button id="activate-group" type="button" class="approve-button">Make active</button>
                             <button id="toggle-group-completion" type="button" class="quiet-button"></button>
-                            <button id="delete-group" type="button" class="delete-button icon-button" aria-label="Delete topic" title="Delete topic">
+                            <button id="delete-group" type="button" class="delete-button icon-button custom-tooltip tooltip-above" aria-label="Delete topic" data-tooltip="Delete topic">
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m4 4v6m4-6v6"/></svg>
                             </button>
                         </div>
@@ -126,7 +126,7 @@
                 <span class="group-copy-label">Submission link</span>
                 <div class="group-link-row">
                     <code id="created-group-link" class="group-link-value" tabindex="0"></code>
-                    <button id="copy-created-group-link" type="button" class="icon-button copy-icon-button" aria-label="Copy submission link" title="Copy submission link">
+                    <button id="copy-created-group-link" type="button" class="icon-button copy-icon-button custom-tooltip tooltip-above" aria-label="Copy submission link" data-tooltip="Copy submission link">
                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2m-9-9h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3Z"/></svg>
                     </button>
                 </div>
@@ -157,6 +157,6 @@
         </form>
     </dialog>
 
-    <script type="module" src="/approve.js?v=19"></script>
+    <script type="module" src="/approve.js?v=20"></script>
 </body>
 </html>

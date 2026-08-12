@@ -555,7 +555,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const revealButton = document.createElement('button');
         revealButton.type = 'button';
-        revealButton.className = 'topic-title-reveal';
+        revealButton.className = 'topic-title-reveal custom-tooltip';
         revealButton.dataset.groupId = group.id;
 
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
