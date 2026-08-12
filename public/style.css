@@ -6,8 +6,9 @@
 
 @font-face {
     font-family: 'NoitaGlyph';
-    src: url('/fonts/NoitaGlyphScaled.ttf') format('truetype');
-    font-display: swap;
+    src: url('/fonts/NoitaGlyphCipher.woff2?v=1') format('woff2'),
+         url('/fonts/NoitaGlyphScaled.ttf') format('truetype');
+    font-display: block;
 }
 
 @font-face {
@@ -1210,6 +1211,11 @@ textarea {
     font-family: 'NoitaGlyph', monospace;
 }
 
+.noita-glyph-pending .topic-heading-name.topic-name-hidden,
+.noita-glyph-failed .topic-heading-name.topic-name-hidden {
+    visibility: hidden;
+}
+
 .topic-title-reveal {
     position: relative;
     display: inline-flex;
@@ -1811,6 +1817,12 @@ textarea {
     gap: 0.3rem;
 }
 
+.group-setting-list {
+    display: grid;
+    gap: 0.1rem;
+    margin-top: 0.3rem;
+}
+
 .group-topic-editor > label,
 .group-copy-label {
     color: #6e6877;
@@ -1828,8 +1840,8 @@ textarea {
     gap: 0.55rem;
     align-items: center;
     min-height: 2.25rem;
-    margin: 0.15rem 0 0.25rem;
-    padding: 0.35rem 0.2rem;
+    margin: 0;
+    padding: 0.3rem 0.2rem;
     color: #9a95a1;
     font-family: system-ui, sans-serif;
     font-size: 0.86rem;

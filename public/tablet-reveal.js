@@ -18,6 +18,28 @@ function seededRandom(seed) {
     };
 }
 
+const cipherAlphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+function cipherCharacter(character, random) {
+    const original = character.toUpperCase();
+    let index = Math.floor(random() * cipherAlphabet.length);
+    if (cipherAlphabet[index] === original) index = (index + 1) % cipherAlphabet.length;
+    const cipher = cipherAlphabet[index];
+    return character !== original && character === character.toLowerCase()
+        ? cipher.toLowerCase()
+        : cipher;
+}
+
+function showGlyphCharacter(span) {
+    span.className = 'glyph-char';
+    span.textContent = span.dataset.glyphCharacter;
+}
+
+function showPixelCharacter(span) {
+    span.className = 'pixel-char';
+    span.textContent = span.dataset.pixelCharacter;
+}
+
 function createRevealOrder(text) {
     const count = Array.from(String(text || '')).filter((character) => !/\s/.test(character)).length;
     const order = Array.from({ length: count }, (_, index) => index);
@@ -32,6 +54,7 @@ function createRevealOrder(text) {
 function buildGlyphText(element, text) {
     element.replaceChildren();
     const spans = [];
+    const random = seededRandom(hashText(text) ^ 0x9E3779B9);
     String(text || '').split(/(\s+)/).forEach((token) => {
         if (/^\s+$/.test(token)) {
             element.appendChild(document.createTextNode(token));
@@ -42,8 +65,9 @@ function buildGlyphText(element, text) {
         word.className = 'word-wrap';
         Array.from(token).forEach((character) => {
             const glyph = document.createElement('span');
-            glyph.textContent = character;
-            glyph.className = 'glyph-char';
+            glyph.dataset.pixelCharacter = character;
+            glyph.dataset.glyphCharacter = cipherCharacter(character, random);
+            showGlyphCharacter(glyph);
             word.appendChild(glyph);
             spans.push(glyph);
         });
@@ -54,7 +78,7 @@ function buildGlyphText(element, text) {
 
 export function renderGlyphText(element, text) {
     const spans = buildGlyphText(element, text);
-    spans.forEach((span) => { span.className = 'glyph-char'; });
+    spans.forEach(showGlyphCharacter);
 }
 
 export function inscribeText(element, text, { delay = 0, duration = 1500 } = {}) {
@@ -64,7 +88,7 @@ export function inscribeText(element, text, { delay = 0, duration = 1500 } = {})
     order.forEach((index, rank) => {
         const progress = spans.length > 0 ? rank / spans.length : 1;
         window.setTimeout(() => {
-            if (spans[index]) spans[index].className = 'pixel-char';
+            if (spans[index]) showPixelCharacter(spans[index]);
         }, reduceMotion ? 0 : delay + progress * duration);
     });
 }
@@ -73,11 +97,11 @@ export function concealText(element, text, { duration = 900 } = {}) {
     const spans = buildGlyphText(element, text);
     const order = createRevealOrder(text);
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    spans.forEach((span) => { span.className = 'pixel-char'; });
+    spans.forEach(showPixelCharacter);
     order.forEach((index, rank) => {
         const progress = spans.length > 0 ? rank / spans.length : 1;
         window.setTimeout(() => {
-            if (spans[index]) spans[index].className = 'glyph-char';
+            if (spans[index]) showGlyphCharacter(spans[index]);
         }, reduceMotion ? 0 : progress * duration);
     });
 }
@@ -86,14 +110,14 @@ export function flickerGlyphText(element, text, { duration = 700 } = {}) {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const spans = buildGlyphText(element, text);
     const order = createRevealOrder(text);
-    spans.forEach((span) => { span.className = 'pixel-char'; });
+    spans.forEach(showPixelCharacter);
     order.forEach((index, rank) => {
         const progress = order.length > 1 ? rank / (order.length - 1) : 0;
         window.setTimeout(() => {
-            if (spans[index]) spans[index].className = 'glyph-char';
+            if (spans[index]) showGlyphCharacter(spans[index]);
         }, progress * duration * 0.42);
         window.setTimeout(() => {
-            if (spans[index]) spans[index].className = 'pixel-char';
+            if (spans[index]) showPixelCharacter(spans[index]);
         }, duration * 0.58 + progress * duration * 0.42);
     });
 }

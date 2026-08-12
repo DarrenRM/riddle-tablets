@@ -18,7 +18,27 @@ import {
     setTopicNameRevealed,
     setTabletRevealed
 } from './tablet-store.js';
-import { concealText, flickerGlyphText, inscribeText, renderGlyphText } from './tablet-reveal.js?v=2';
+import { concealText, flickerGlyphText, inscribeText, renderGlyphText } from './tablet-reveal.js?v=3';
+
+async function prepareNoitaGlyphFont() {
+    const root = document.documentElement;
+    if (!document.fonts || typeof document.fonts.load !== 'function') {
+        root.classList.remove('noita-glyph-pending', 'noita-glyph-ready');
+        root.classList.add('noita-glyph-failed');
+        return;
+    }
+    try {
+        const faces = await document.fonts.load('16px "NoitaGlyph"', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789');
+        if (!faces.some((face) => face.status === 'loaded')) throw new Error('Noita glyph font did not load.');
+        root.classList.remove('noita-glyph-pending', 'noita-glyph-failed');
+        root.classList.add('noita-glyph-ready');
+    } catch {
+        root.classList.remove('noita-glyph-pending', 'noita-glyph-ready');
+        root.classList.add('noita-glyph-failed');
+    }
+}
+
+void prepareNoitaGlyphFont();
 
 document.addEventListener('DOMContentLoaded', () => {
     const waiting = document.getElementById('waiting-state');

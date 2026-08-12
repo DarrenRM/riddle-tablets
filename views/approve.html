@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Riddle Review</title>
     <link rel="icon" type="image/png" href="/images/emerald_tablet.png">
-    <link rel="stylesheet" href="/style.css?v=58">
+    <link rel="stylesheet" href="/style.css?v=59">
 </head>
 <body class="approve-page">
     <div class="approve-container group-approve-container">
@@ -54,20 +54,22 @@
                                 <input id="group-topic-input" type="text" maxlength="120" required>
                                 <button id="save-group-topic" type="button">Save settings</button>
                             </div>
-                            <label class="group-setting-toggle custom-tooltip" for="group-multi-step">
-                                <input id="group-multi-step" type="checkbox">
-                                <span>
-                                    <strong>Multi-step Quest</strong>
-                                    <small>riddles one at a time, revealed in approved order</small>
-                                </span>
-                            </label>
-                            <label class="group-setting-toggle custom-tooltip" for="group-side-quest">
-                                <input id="group-side-quest" type="checkbox">
-                                <span>
-                                    <strong>Side Quest</strong>
-                                    <small>keeps the side-quest label readable on public pages</small>
-                                </span>
-                            </label>
+                            <div class="group-setting-list">
+                                <label class="group-setting-toggle custom-tooltip" for="group-multi-step">
+                                    <input id="group-multi-step" type="checkbox">
+                                    <span>
+                                        <strong>Multi-step Quest</strong>
+                                        <small>riddles one at a time, revealed in approved order</small>
+                                    </span>
+                                </label>
+                                <label class="group-setting-toggle custom-tooltip" for="group-side-quest">
+                                    <input id="group-side-quest" type="checkbox">
+                                    <span>
+                                        <strong>Side Quest</strong>
+                                        <small>keeps the side-quest label readable on public pages</small>
+                                    </span>
+                                </label>
+                            </div>
                         </div>
 
                         <div class="group-link-panel">
@@ -112,20 +114,22 @@
                 <span>Topic</span>
                 <input id="new-group-topic" type="text" maxlength="120" required autocomplete="off">
             </label>
-            <label class="group-setting-toggle" for="new-group-multi-step">
-                <input id="new-group-multi-step" type="checkbox">
-                <span>
-                    <strong>Multi-step Quest</strong>
-                    <small>riddles one at a time, revealed in approved order</small>
-                </span>
-            </label>
-            <label class="group-setting-toggle" for="new-group-side-quest">
-                <input id="new-group-side-quest" type="checkbox">
-                <span>
-                    <strong>Side Quest</strong>
-                    <small>keeps the side-quest label readable on public pages</small>
-                </span>
-            </label>
+            <div class="group-setting-list">
+                <label class="group-setting-toggle" for="new-group-multi-step">
+                    <input id="new-group-multi-step" type="checkbox">
+                    <span>
+                        <strong>Multi-step Quest</strong>
+                        <small>riddles one at a time, revealed in approved order</small>
+                    </span>
+                </label>
+                <label class="group-setting-toggle" for="new-group-side-quest">
+                    <input id="new-group-side-quest" type="checkbox">
+                    <span>
+                        <strong>Side Quest</strong>
+                        <small>keeps the side-quest label readable on public pages</small>
+                    </span>
+                </label>
+            </div>
             <p id="create-group-error" class="dialog-error" role="alert"></p>
             <div class="dialog-actions">
                 <button type="button" data-close-dialog>Cancel</button>

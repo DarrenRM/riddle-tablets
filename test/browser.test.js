@@ -240,6 +240,13 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('#group-side-quest').uncheck();
     await page.waitForFunction(() => !document.querySelector('#group-side-quest').disabled);
     assert.equal((await groupRepository.get(workGroupId)).sideQuest, false);
+    const settingToggleBoxes = await page.locator('.group-topic-editor .group-setting-toggle').evaluateAll((toggles) => toggles.map((toggle) => {
+      const box = toggle.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom };
+    }));
+    assert.equal(settingToggleBoxes.length, 2);
+    assert.ok(settingToggleBoxes[1].top - settingToggleBoxes[0].bottom >= 0);
+    assert.ok(settingToggleBoxes[1].top - settingToggleBoxes[0].bottom <= 4);
     await page.unroute('**/api/moderation/groups/*');
     await page.route('**/api/moderation/groups/*', (route) => route.fulfill({
       status: 500,
@@ -304,13 +311,59 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('#confirm-delete-group').isDisabled(), true);
     await page.locator('#cancel-delete-group').click();
     await waitingPage.locator('.active-topic .topic-heading').waitFor({ state: 'visible', timeout: 12000 });
-    assert.equal(await waitingPage.locator('.active-topic .topic-heading').textContent(), 'The Work');
+    assert.equal(await waitingPage.locator('.active-topic .topic-heading').getAttribute('data-topic-name'), 'The Work');
     await waitingPage.close();
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
+    assert.equal(await page.locator('.active-topic .topic-heading').getAttribute('data-topic-name'), 'The Work');
+    assert.notEqual(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
     assert.equal(await page.locator('#hide-main-riddle-names').count(), 0);
     assert.equal(await page.locator('.active-topic .topic-heading-name.topic-name-hidden').count(), 1);
+    await page.waitForFunction(() => document.documentElement.classList.contains('noita-glyph-ready'));
+    assert.equal(await page.locator('link[rel="preload"][as="font"][href*="NoitaGlyphCipher.woff2"]').count(), 1);
+    assert.equal(
+      await page.locator('.active-topic .topic-heading-name').evaluate((name) => getComputedStyle(name).visibility),
+      'visible'
+    );
+    assert.equal(
+      await page.locator('.active-topic .topic-heading-name').evaluate((name) => [...name.querySelectorAll('.glyph-char')]
+        .every((glyph) => glyph.textContent === glyph.dataset.glyphCharacter
+          && glyph.textContent !== glyph.dataset.pixelCharacter)),
+      true
+    );
+
+    const failedFontContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+    const failedFontPage = await failedFontContext.newPage();
+    let releaseCipherFont;
+    const cipherFontGate = new Promise((resolve) => { releaseCipherFont = resolve; });
+    await failedFontPage.route('**/fonts/NoitaGlyphCipher.woff2*', async (route) => {
+      await cipherFontGate;
+      await route.abort();
+    });
+    await failedFontPage.route('**/fonts/NoitaGlyphScaled.ttf*', (route) => route.abort());
+    await failedFontPage.goto(origin, { waitUntil: 'domcontentloaded' });
+    const failedFontName = failedFontPage.locator('.active-topic .topic-heading-name');
+    await failedFontName.waitFor({ state: 'attached' });
+    assert.equal(await failedFontPage.locator('html.noita-glyph-pending').count(), 1);
+    assert.equal(await failedFontName.evaluate((name) => getComputedStyle(name).visibility), 'hidden');
+    assert.equal(await failedFontName.locator('.glyph-char').count() > 0, true);
+    assert.notEqual(await failedFontName.textContent(), 'The Work');
+    releaseCipherFont();
+    await failedFontPage.waitForFunction(() => document.documentElement.classList.contains('noita-glyph-failed'));
+    assert.equal(await failedFontName.evaluate((name) => getComputedStyle(name).visibility), 'hidden');
+    await failedFontPage.getByRole('button', { name: 'Reveal title' }).click();
+    await failedFontPage.waitForFunction(() => document.querySelector('.topic-heading-name')?.textContent === 'The Work');
+    assert.equal(await failedFontName.evaluate((name) => getComputedStyle(name).visibility), 'visible');
+    await failedFontPage.getByRole('button', { name: 'Hide title' }).click();
+    await failedFontPage.waitForFunction(() => {
+      const name = document.querySelector('.topic-heading-name');
+      return name?.classList.contains('topic-name-hidden')
+        && name.querySelectorAll('.pixel-char').length === 0
+        && name.textContent !== 'The Work';
+    });
+    assert.equal(await failedFontName.evaluate((name) => getComputedStyle(name).visibility), 'hidden');
+    await failedFontContext.close();
+
     const revealWorkTitle = page.getByRole('button', { name: 'Reveal title' });
     assert.equal(await revealWorkTitle.getAttribute('data-tooltip'), 'Reveal Title');
     assert.equal(await revealWorkTitle.getAttribute('aria-pressed'), 'false');
@@ -345,7 +398,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.active-topic .topic-heading-name.topic-name-hidden').count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Hide title' }).getAttribute('aria-pressed'), 'true');
-    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
+    assert.equal(await page.locator('.active-topic .topic-heading').getAttribute('data-topic-name'), 'The Work');
     const activeHeadingTypography = await page.locator('.active-topic .topic-heading').evaluate((element) => ({
       fontSize: getComputedStyle(element).fontSize,
       letterSpacing: getComputedStyle(element).letterSpacing,
@@ -501,7 +554,8 @@ test('topic creation, submission, moderation, presentation, and local group comp
     });
     await groupRepository.setStatus(nextGroup.id, 'active');
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Moon');
+    assert.equal(await page.locator('.active-topic .topic-heading').getAttribute('data-topic-name'), 'The Moon');
+    assert.notEqual(await page.locator('.active-topic .topic-heading').textContent(), 'The Moon');
     assert.equal(await page.locator('.active-topic .topic-heading-prefix').textContent(), 'Side Quest:');
     assert.match(
       await page.locator('.active-topic .topic-heading-prefix').evaluate((element) => getComputedStyle(element).fontFamily),
@@ -547,7 +601,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await multiPage.goto(origin, { waitUntil: 'domcontentloaded' });
     assert.equal(await multiPage.locator('.active-topic').count(), 2);
     assert.deepEqual(
-      (await multiPage.locator('.active-topic .topic-heading').allTextContents()).sort(),
+      (await multiPage.locator('.active-topic .topic-heading').evaluateAll((headings) => headings.map((heading) => heading.dataset.topicName))).sort(),
       ['The Moon', 'The Work'].sort()
     );
     assert.equal(await multiPage.locator('#active-topics').evaluate((element) => element.classList.contains('multiple-active-topics')), true);
@@ -622,7 +676,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await completedPage.locator('#waiting-state').isVisible(), false);
     assert.equal(await completedPage.locator('.active-topic').count(), 1);
     assert.equal(await completedPage.locator('.solved-topic').count(), 0);
-    assert.equal(await completedPage.locator('.active-topic .topic-heading').textContent(), 'The Work');
+    assert.equal(await completedPage.locator('.active-topic .topic-heading').getAttribute('data-topic-name'), 'The Work');
 
     await page.locator('.group-list-item').filter({ hasText: 'The Work' }).click();
     await page.locator('#toggle-group-completion').click();
@@ -661,7 +715,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('.archive-topic').first().waitFor({ state: 'visible' });
     assert.equal(await page.locator('.archive-topic').count(), 3);
     assert.deepEqual(
-      (await page.locator('.archive-topic-name').allTextContents()).sort(),
+      (await page.locator('.archive-topic-name').evaluateAll((headings) => headings.map((heading) => heading.dataset.topicName))).sort(),
       ['Audience Preview', 'The Moon', 'The Work'].sort()
     );
     assert.equal(await page.locator('#hide-riddle-names').count(), 0);
@@ -769,9 +823,9 @@ test('topic creation, submission, moderation, presentation, and local group comp
     });
     await racePage.goto(origin, { waitUntil: 'domcontentloaded' });
     await racePage.locator('.active-topic .topic-heading').waitFor({ state: 'visible', timeout: 3000 });
-    assert.equal(await racePage.locator('.active-topic .topic-heading').textContent(), 'Fresh Topic');
+    assert.equal(await racePage.locator('.active-topic .topic-heading').getAttribute('data-topic-name'), 'Fresh Topic');
     await new Promise((resolve) => setTimeout(resolve, 500));
-    assert.equal(await racePage.locator('.active-topic .topic-heading').textContent(), 'Fresh Topic');
+    assert.equal(await racePage.locator('.active-topic .topic-heading').getAttribute('data-topic-name'), 'Fresh Topic');
     await racePage.close();
 
     const sortPage = await context.newPage();
@@ -850,7 +904,8 @@ test('multi-step quests unlock in order, complete on the final step, and reset l
     const origin = `http://127.0.0.1:${server.address().port}`;
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
 
-    assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Fourfold Trial');
+    assert.equal(await page.locator('.active-topic .topic-heading').getAttribute('data-topic-name'), 'The Fourfold Trial');
+    assert.notEqual(await page.locator('.active-topic .topic-heading').textContent(), 'The Fourfold Trial');
     assert.equal(await page.locator('.active-topic .topic-heading-prefix').textContent(), 'Side Quest · Multi-step:');
     assert.equal(await page.locator('.active-topic .topic-heading-name.topic-name-hidden').count(), 1);
     assert.match(
