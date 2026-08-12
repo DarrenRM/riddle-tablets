@@ -1405,12 +1405,37 @@ textarea {
     color: var(--gold);
 }
 
-.solved-topic-heading-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
+.solved-topic-heading-stack {
     margin-bottom: 1.5rem;
+}
+
+.solved-topic-status {
+    margin-bottom: 0.4rem;
+    color: var(--gold);
+    font-family: 'NoitaPixel', monospace;
+    font-size: clamp(0.62rem, 1.35vw, 0.76rem);
+    font-weight: normal;
+    letter-spacing: 0.12em;
+    line-height: 1.25;
+    text-align: center;
+    text-transform: uppercase;
+    transform: translateY(var(--noita-title-optical-shift));
+}
+
+.solved-topic-heading-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+}
+
+.solved-topic-heading-row .topic-heading {
+    grid-column: 2;
+}
+
+.solved-topic-heading-row .solved-topic-menu {
+    grid-column: 3;
+    justify-self: start;
+    margin-left: 0.4rem;
 }
 
 .solved-topic-menu {

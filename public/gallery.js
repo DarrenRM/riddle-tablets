@@ -756,8 +756,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const heading = document.createElement('h2');
         heading.id = `solved-topic-heading-${presentation.group.id}`;
         heading.className = 'topic-heading';
-        heading.dataset.topicName = `Solved: ${displayTopic(presentation.group)}`;
-        heading.textContent = heading.dataset.topicName;
+        heading.dataset.topicName = presentation.group.topic;
+        heading.setAttribute('aria-label', `Solved: ${displayTopic(presentation.group)}`);
+        heading.textContent = presentation.group.topic;
+
+        const headingStack = document.createElement('div');
+        headingStack.className = 'solved-topic-heading-stack';
+        const statusLabel = document.createElement('div');
+        statusLabel.className = 'solved-topic-status';
+        statusLabel.setAttribute('aria-hidden', 'true');
+        statusLabel.textContent = `Solved:${topicPrefixLabel(presentation.group) ? ` ${topicPrefixLabel(presentation.group)}` : ''}`;
 
         const headingRow = document.createElement('div');
         headingRow.className = 'solved-topic-heading-row';
@@ -793,6 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
         menuList.append(removeSolved, replaySuccess);
         menu.append(menuToggle, menuList);
         headingRow.append(heading, menu);
+        headingStack.append(statusLabel, headingRow);
 
         menuToggle.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -826,7 +835,7 @@ document.addEventListener('DOMContentLoaded', () => {
         solvedGrid.className = 'tablet-grid';
         const cards = presentation.tablets.map((tablet) => createTablet(tablet, revealed.has(tablet.id)));
         solvedGrid.replaceChildren(...cards);
-        section.append(headingRow, solvedGrid);
+        section.append(headingStack, solvedGrid);
         return { section, solvedGrid, cards };
     }
 

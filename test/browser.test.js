@@ -453,7 +453,16 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('#completion-celebration[data-phase="success"]').waitFor();
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
     assert.equal(await page.locator('#waiting-state').isVisible(), true);
-    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'The Work');
+    assert.equal(await page.locator('.solved-topic-status').textContent(), 'Solved:');
+    assert.match(
+      await page.locator('.solved-topic-status').evaluate((element) => getComputedStyle(element).color),
+      /240, 192, 64/
+    );
+    assert.ok(Number.parseFloat(
+      await page.locator('.solved-topic-status').evaluate((element) => getComputedStyle(element).fontSize)
+    ) < Number.parseFloat(activeHeadingTypography.fontSize));
+    assert.equal(await page.locator('.solved-topic .topic-heading').getAttribute('aria-label'), 'Solved: The Work');
     assert.equal(await page.locator('.solved-topic .topic-title-reveal').count(), 0);
     assert.match(
       await page.locator('.solved-topic .topic-heading').evaluate((element) => getComputedStyle(element).color),
@@ -491,7 +500,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.solved-topic').isVisible(), true);
-    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'The Work');
     assert.equal(await page.locator('#return-topic-button').count(), 0);
     assert.equal(await page.getByRole('link', { name: 'Past topics' }).count(), 0);
 
@@ -506,10 +515,10 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.evaluate(() => { Math.random = () => 0.75; });
     await replaySuccess.click();
     await page.locator('#completion-celebration[data-phase="success"]').waitFor();
-    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'The Work');
     assert.match(await page.locator('#ancient-sound').getAttribute('src'), /noita-ancient-02\.mp3/);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'The Work');
 
     await solvedOptions.click();
     await removeFromSolved.press('Escape');
@@ -520,7 +529,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
 
     const storagePage = await context.newPage();
     await storagePage.goto(origin, { waitUntil: 'domcontentloaded' });
-    assert.equal(await storagePage.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.equal(await storagePage.locator('.solved-topic .topic-heading').textContent(), 'The Work');
     await solvedOptions.click();
     await removeFromSolved.click();
     await page.locator('.active-topic .topic-heading').waitFor({ state: 'visible' });
@@ -534,7 +543,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     await page.locator('.active-topic .solve-topic-button').click();
     await page.locator('.solved-topic .topic-heading').waitFor({ state: 'visible' });
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'The Work');
 
     const freshContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const freshPage = await freshContext.newPage();
@@ -593,7 +602,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.ok(mixedTitleTypography.glyphShift < -2);
     assert.ok(mixedTitleTypography.glyphCount > 0);
     assert.equal(await page.locator('.solved-topic').count(), 1);
-    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'The Work');
     assert.equal(await page.getByRole('link', { name: 'Past topics' }).count(), 0);
 
     const multiContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
@@ -666,7 +675,11 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await solvedAfterCompletionPage.locator('#waiting-state').isVisible(), true);
     assert.deepEqual(
       (await solvedAfterCompletionPage.locator('.solved-topic .topic-heading').allTextContents()).sort(),
-      ['Solved: Side Quest: The Moon', 'Solved: The Work'].sort()
+      ['The Moon', 'The Work'].sort()
+    );
+    assert.deepEqual(
+      (await solvedAfterCompletionPage.locator('.solved-topic-status').allTextContents()).sort(),
+      ['Solved:', 'Solved: Side Quest:'].sort()
     );
     await solvedAfterCompletionPage.close();
 
@@ -960,7 +973,12 @@ test('multi-step quests unlock in order, complete on the final step, and reset l
     await page.locator('#completion-close').click();
     await page.locator('#completion-celebration').waitFor({ state: 'hidden' });
 
-    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: Side Quest · Multi-step: The Fourfold Trial');
+    assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'The Fourfold Trial');
+    assert.equal(await page.locator('.solved-topic-status').textContent(), 'Solved: Side Quest · Multi-step:');
+    assert.equal(
+      await page.locator('.solved-topic .topic-heading').getAttribute('aria-label'),
+      'Solved: Side Quest · Multi-step: The Fourfold Trial'
+    );
     await page.locator('.solved-topic-menu-toggle').click();
     await page.getByRole('menuitem', { name: 'Remove from Solved' }).click();
     await page.waitForFunction(() => document.querySelectorAll('.quest-step-current').length === 1);
