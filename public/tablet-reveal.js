@@ -64,6 +64,19 @@ export function inscribeText(element, text, { delay = 0, duration = 1500 } = {})
     });
 }
 
+export function concealText(element, text, { duration = 900 } = {}) {
+    const spans = buildGlyphText(element, text);
+    const order = createRevealOrder(text);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    spans.forEach((span) => { span.className = 'pixel-char'; });
+    order.forEach((index, rank) => {
+        const progress = spans.length > 0 ? rank / spans.length : 1;
+        window.setTimeout(() => {
+            if (spans[index]) spans[index].className = 'glyph-char';
+        }, reduceMotion ? 0 : progress * duration);
+    });
+}
+
 export function flickerGlyphText(element, text, { duration = 700 } = {}) {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const spans = buildGlyphText(element, text);

@@ -3,7 +3,7 @@ const REVEAL_STORAGE_KEY = 'riddle-tablet-reveals.v1';
 const LEGACY_COMPLETE_STORAGE_KEY = 'riddle-tablet-completions.v1';
 export const SOLVED_GROUP_STORAGE_KEY = 'riddle-topic-groups-solved.v1';
 export const QUEST_PROGRESS_STORAGE_KEY = 'riddle-topic-quest-progress.v1';
-export const MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY = 'riddle-main-topic-names-hidden.v1';
+export const REVEALED_TOPIC_NAMES_STORAGE_KEY = 'riddle-topic-names-revealed.v1';
 
 function clean(value, maxLength) {
     return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
@@ -93,19 +93,16 @@ export function setGroupSolved(id, isSolved) {
     saveIds(SOLVED_GROUP_STORAGE_KEY, ids);
 }
 
-export function loadMainRiddleNamesHidden() {
-    try {
-        const saved = localStorage.getItem(MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY);
-        return saved === null ? true : saved === 'true';
-    } catch {
-        return true;
-    }
+export function loadRevealedTopicNameIds() {
+    return loadIds(REVEALED_TOPIC_NAMES_STORAGE_KEY);
 }
 
-export function setMainRiddleNamesHidden(isHidden) {
-    try {
-        localStorage.setItem(MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY, String(Boolean(isHidden)));
-    } catch {}
+export function setTopicNameRevealed(id, isRevealed) {
+    if (typeof id !== 'string' || !id) return;
+    const ids = loadRevealedTopicNameIds();
+    if (isRevealed) ids.add(id);
+    else ids.delete(id);
+    saveIds(REVEALED_TOPIC_NAMES_STORAGE_KEY, ids);
 }
 
 export function loadQuestCompletedStepCount(groupId, tabletIds, questRevision) {

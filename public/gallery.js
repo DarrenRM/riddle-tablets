@@ -5,20 +5,20 @@ import {
     listPresentations
 } from './tablet-api.js';
 import {
-    loadMainRiddleNamesHidden,
     loadRevealedTabletIds,
+    loadRevealedTopicNameIds,
     loadQuestCompletedStepCount,
     loadSolvedGroupIds,
     QUEST_PROGRESS_STORAGE_KEY,
-    MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY,
+    REVEALED_TOPIC_NAMES_STORAGE_KEY,
     resetQuestProgress,
     SOLVED_GROUP_STORAGE_KEY,
     setGroupSolved,
-    setMainRiddleNamesHidden,
     setQuestCompletedStepCount,
+    setTopicNameRevealed,
     setTabletRevealed
 } from './tablet-store.js';
-import { flickerGlyphText, inscribeText } from './tablet-reveal.js';
+import { concealText, flickerGlyphText, inscribeText } from './tablet-reveal.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const waiting = document.getElementById('waiting-state');
@@ -28,9 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorState = document.getElementById('topic-error');
     const archiveView = document.getElementById('topic-archive');
     const archiveList = document.getElementById('topic-archive-list');
-    const hideRiddleNames = document.getElementById('hide-riddle-names');
-    const mainRiddleNameControl = document.getElementById('main-riddle-name-control');
-    const hideMainRiddleNames = document.getElementById('hide-main-riddle-names');
     const celebration = document.getElementById('completion-celebration');
     const completionTitle = document.getElementById('completion-title');
     const completionClose = document.getElementById('completion-close');
@@ -43,8 +40,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ? 'archive'
         : (routeParts[0] === 'preview' ? 'preview' : (routeParts[0] === 'topics' ? 'topic' : 'active'));
     const routeId = mode === 'preview' ? routeParts[2] : (mode === 'topic' ? routeParts[1] : null);
-
-    if (mode === 'active') hideMainRiddleNames.checked = loadMainRiddleNamesHidden();
 
     let currentPresentations = [];
     let availablePresentations = [];
@@ -531,23 +526,71 @@ document.addEventListener('DOMContentLoaded', () => {
         return group && group.multiStep ? `Multi-step: ${group.topic}` : group.topic;
     }
 
-    function renderTopicHeadingName(heading, hidden, animate = false) {
+    function renderTopicHeadingName(heading, revealButton, revealed, animate = false) {
         const topicName = heading.dataset.topicName || '';
-        heading.classList.toggle('archive-topic-name-hidden', hidden);
-        if (hidden) {
-            heading.textContent = topicName;
-            heading.setAttribute('aria-label', 'Riddle name hidden');
-        } else {
+        heading.classList.toggle('topic-name-hidden', !revealed);
+        if (revealed) {
             heading.setAttribute('aria-label', topicName);
             if (animate) inscribeText(heading, topicName, { duration: 1200 });
             else heading.textContent = topicName;
+        } else {
+            heading.setAttribute('aria-label', 'Riddle name hidden');
+            if (animate) concealText(heading, topicName, { duration: 900 });
+            else heading.textContent = topicName;
         }
+        if (!revealButton) return;
+        revealButton.setAttribute('aria-pressed', String(revealed));
+        revealButton.setAttribute('aria-label', revealed ? 'Hide title' : 'Reveal title');
+        revealButton.dataset.tooltip = revealed ? 'Hide Title' : 'Reveal Title';
     }
 
-    function applyMainRiddleNamePreference(animate = false) {
-        if (mode !== 'active') return;
-        document.querySelectorAll('#active-topics .topic-heading, #solved-topics .topic-heading').forEach((heading) => {
-            renderTopicHeadingName(heading, hideMainRiddleNames.checked, animate && !hideMainRiddleNames.checked);
+    function createTopicHeadingRow(heading, group, { interactive = true } = {}) {
+        const row = document.createElement('div');
+        row.className = 'topic-heading-row';
+        if (!interactive) {
+            renderTopicHeadingName(heading, null, true);
+            row.appendChild(heading);
+            return row;
+        }
+
+        const revealButton = document.createElement('button');
+        revealButton.type = 'button';
+        revealButton.className = 'topic-title-reveal';
+        revealButton.dataset.groupId = group.id;
+
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('aria-hidden', 'true');
+        const eye = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        eye.setAttribute('d', 'M2.3 12s3.4-6 9.7-6 9.7 6 9.7 6-3.4 6-9.7 6-9.7-6-9.7-6Z');
+        const pupil = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        pupil.setAttribute('cx', '12');
+        pupil.setAttribute('cy', '12');
+        pupil.setAttribute('r', '2.8');
+        const slash = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        slash.classList.add('topic-title-eye-slash');
+        slash.setAttribute('d', 'M4 4l16 16');
+        svg.append(eye, pupil, slash);
+        revealButton.appendChild(svg);
+
+        const initiallyRevealed = loadRevealedTopicNameIds().has(group.id);
+        renderTopicHeadingName(heading, revealButton, initiallyRevealed);
+        revealButton.addEventListener('click', () => {
+            const nextRevealed = revealButton.getAttribute('aria-pressed') !== 'true';
+            setTopicNameRevealed(group.id, nextRevealed);
+            renderTopicHeadingName(heading, revealButton, nextRevealed, true);
+        });
+
+        row.append(heading, revealButton);
+        return row;
+    }
+
+    function syncRenderedTopicTitles() {
+        const revealedIds = loadRevealedTopicNameIds();
+        document.querySelectorAll('.topic-title-reveal').forEach((revealButton) => {
+            const heading = revealButton.closest('.topic-heading-row')?.querySelector('.topic-heading');
+            if (!heading) return;
+            renderTopicHeadingName(heading, revealButton, revealedIds.has(revealButton.dataset.groupId));
         });
     }
 
@@ -563,6 +606,7 @@ document.addEventListener('DOMContentLoaded', () => {
         heading.className = 'topic-heading';
         heading.dataset.topicName = displayTopic(group);
         heading.textContent = heading.dataset.topicName;
+        const headingRow = createTopicHeadingRow(heading, group, { interactive: mode !== 'preview' });
 
         const topicGrid = document.createElement('div');
         topicGrid.className = 'tablet-grid';
@@ -635,7 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         topicGrid.replaceChildren(...cards);
         groupSolveButton.addEventListener('click', completeTopic);
-        section.append(heading, topicGrid, completionActions);
+        section.append(headingRow, topicGrid, completionActions);
         updateSolveVisibility();
         return { section, topicGrid, cards };
     }
@@ -782,17 +826,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        if (mode === 'active') {
-            const hasTopicHeadings = Boolean(document.querySelector('#active-topics .topic-heading, #solved-topics .topic-heading'));
-            mainRiddleNameControl.classList.toggle('hidden', !hasTopicHeadings);
-            applyMainRiddleNamePreference();
-        }
-
         stopLayouts = () => layouts.forEach((stop) => stop());
         if (!waiting.classList.contains('hidden')) startLonglegCycle();
     }
 
     async function renderArchive() {
+        stopLayouts();
         hidePresentationViews();
         archiveView.classList.remove('hidden');
         try {
@@ -805,6 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             const layouts = [];
+            const solvedIds = loadSolvedGroupIds();
             const rendered = presentations.map((presentation) => {
                 const section = document.createElement('section');
                 section.className = 'topic-section archive-topic';
@@ -815,6 +855,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 heading.dataset.topicName = displayTopic(presentation.group);
                 heading.id = `archive-topic-heading-${presentation.group.id}`;
                 section.setAttribute('aria-labelledby', heading.id);
+                const headingRow = createTopicHeadingRow(heading, presentation.group, {
+                    interactive: !solvedIds.has(presentation.group.id)
+                });
 
                 const grid = document.createElement('div');
                 grid.className = 'tablet-grid';
@@ -822,21 +865,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     persistRevealState: false
                 }));
                 grid.replaceChildren(...cards);
-                section.append(heading, grid);
-                return { section, heading, grid, cards };
+                section.append(headingRow, grid);
+                return { section, grid, cards };
             });
 
-            const setNamesHidden = (hidden, animate = false) => {
-                rendered.forEach(({ heading }) => {
-                    renderTopicHeadingName(heading, hidden, animate && !hidden);
-                });
-            };
-
             archiveList.replaceChildren(...rendered.map(({ section }) => section));
-            setNamesHidden(hideRiddleNames.checked);
-            hideRiddleNames.addEventListener('change', () => {
-                setNamesHidden(hideRiddleNames.checked, !hideRiddleNames.checked);
-            }, { once: false });
             rendered.forEach(({ grid, cards }) => {
                 if (cards.length) layouts.push(installMasonry(grid, cards));
             });
@@ -905,15 +938,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    hideMainRiddleNames.addEventListener('change', () => {
-        setMainRiddleNamesHidden(hideMainRiddleNames.checked);
-        applyMainRiddleNamePreference(true);
-    });
-
     window.addEventListener('storage', (event) => {
-        if (event.key === MAIN_RIDDLE_NAMES_HIDDEN_STORAGE_KEY && mode === 'active') {
-            hideMainRiddleNames.checked = loadMainRiddleNamesHidden();
-            applyMainRiddleNamePreference();
+        if (event.key === REVEALED_TOPIC_NAMES_STORAGE_KEY) {
+            syncRenderedTopicTitles();
+            return;
+        }
+        if (event.key === SOLVED_GROUP_STORAGE_KEY && mode === 'archive') {
+            renderArchive();
             return;
         }
         if ([SOLVED_GROUP_STORAGE_KEY, QUEST_PROGRESS_STORAGE_KEY].includes(event.key)

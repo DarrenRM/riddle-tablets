@@ -250,25 +250,42 @@ test('topic creation, submission, moderation, presentation, and local group comp
 
     await page.goto(origin, { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
-    assert.equal(await page.locator('#hide-main-riddle-names').isChecked(), true);
-    assert.equal(await page.locator('.active-topic .topic-heading.archive-topic-name-hidden').count(), 1);
-    await page.locator('#hide-main-riddle-names').uncheck();
+    assert.equal(await page.locator('#hide-main-riddle-names').count(), 0);
+    assert.equal(await page.locator('.active-topic .topic-heading.topic-name-hidden').count(), 1);
+    const revealWorkTitle = page.getByRole('button', { name: 'Reveal title' });
+    assert.equal(await revealWorkTitle.getAttribute('data-tooltip'), 'Reveal Title');
+    assert.equal(await revealWorkTitle.getAttribute('aria-pressed'), 'false');
+    await revealWorkTitle.hover();
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    assert.equal(
+      await revealWorkTitle.evaluate((button) => getComputedStyle(button, '::after').opacity),
+      '1'
+    );
+    await revealWorkTitle.click();
     await page.waitForFunction(() => {
       const heading = document.querySelector('.active-topic .topic-heading');
-      return heading && !heading.classList.contains('archive-topic-name-hidden')
+      return heading && !heading.classList.contains('topic-name-hidden')
         && heading.querySelectorAll('.glyph-char').length === 0;
     });
-    assert.equal(
-      await page.evaluate(() => localStorage.getItem('riddle-main-topic-names-hidden.v1')),
-      'false'
-    );
+    assert.equal(await page.getByRole('button', { name: 'Hide title' }).getAttribute('data-tooltip'), 'Hide Title');
+
+    const titleSyncPage = await context.newPage();
+    await titleSyncPage.goto(origin, { waitUntil: 'domcontentloaded' });
+    assert.equal(await titleSyncPage.locator('.active-topic .topic-heading.topic-name-hidden').count(), 0);
+    await page.getByRole('button', { name: 'Hide title' }).click();
+    await titleSyncPage.locator('.active-topic .topic-heading.topic-name-hidden').waitFor({ state: 'attached' });
+    await page.waitForFunction(() => {
+      const heading = document.querySelector('.active-topic .topic-heading');
+      return heading && heading.classList.contains('topic-name-hidden')
+        && heading.querySelectorAll('.pixel-char').length === 0;
+    });
+    await titleSyncPage.getByRole('button', { name: 'Reveal title' }).click();
+    await page.waitForFunction(() => !document.querySelector('.active-topic .topic-heading').classList.contains('topic-name-hidden'));
+    await titleSyncPage.close();
+
     await page.reload({ waitUntil: 'domcontentloaded' });
-    assert.equal(await page.locator('#hide-main-riddle-names').isChecked(), false);
-    assert.equal(await page.locator('.active-topic .topic-heading.archive-topic-name-hidden').count(), 0);
-    assert.equal(
-      await page.evaluate(() => localStorage.getItem('riddle-main-topic-names-hidden.v1')),
-      'false'
-    );
+    assert.equal(await page.locator('.active-topic .topic-heading.topic-name-hidden').count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Hide title' }).getAttribute('aria-pressed'), 'true');
     assert.equal(await page.locator('.active-topic .topic-heading').textContent(), 'The Work');
     const activeHeadingTypography = await page.locator('.active-topic .topic-heading').evaluate((element) => ({
       fontSize: getComputedStyle(element).fontSize,
@@ -314,6 +331,7 @@ test('topic creation, submission, moderation, presentation, and local group comp
     assert.equal(await page.locator('#completion-title').getAttribute('aria-label'), 'Success');
     assert.equal(await page.locator('#waiting-state').isVisible(), true);
     assert.equal(await page.locator('.solved-topic .topic-heading').textContent(), 'Solved: The Work');
+    assert.equal(await page.locator('.solved-topic .topic-title-reveal').count(), 0);
     assert.match(
       await page.locator('.solved-topic .topic-heading').evaluate((element) => getComputedStyle(element).color),
       /240, 192, 64/
@@ -539,29 +557,33 @@ test('topic creation, submission, moderation, presentation, and local group comp
       (await page.locator('.archive-topic-name').allTextContents()).sort(),
       ['Audience Preview', 'The Moon', 'The Work'].sort()
     );
-    assert.equal(await page.locator('#hide-riddle-names').isChecked(), true);
-    assert.equal(await page.locator('.archive-topic-name-hidden').count(), 3);
-    assert.deepEqual(
-      await page.locator('.archive-topic-name').evaluateAll((headings) => headings.map((heading) => heading.getAttribute('aria-label'))),
-      ['Riddle name hidden', 'Riddle name hidden', 'Riddle name hidden']
-    );
+    assert.equal(await page.locator('#hide-riddle-names').count(), 0);
+    assert.equal(await page.locator('.archive-topic-name.topic-name-hidden').count(), 1);
+    assert.equal(await page.locator('.archive-topic .topic-title-reveal').count(), 1);
+    const audienceArchiveSection = page.locator(`.archive-topic[data-group-id="${audienceGroup.id}"]`);
+    const audienceTitle = audienceArchiveSection.locator('.archive-topic-name');
+    const audienceTitleReveal = audienceArchiveSection.getByRole('button', { name: 'Reveal title' });
+    assert.equal(await audienceTitle.getAttribute('aria-label'), 'Riddle name hidden');
     assert.match(
-      await page.locator('.archive-topic-name').first().evaluate((heading) => getComputedStyle(heading).fontFamily),
+      await audienceTitle.evaluate((heading) => getComputedStyle(heading).fontFamily),
       /NoitaGlyph/
     );
 
-    await page.locator('#hide-riddle-names').uncheck();
-    await page.waitForFunction(() => [...document.querySelectorAll('.archive-topic-name')].every((heading) => (
-      !heading.classList.contains('archive-topic-name-hidden')
-      && heading.querySelectorAll('.glyph-char').length === 0
-      && heading.querySelectorAll('.pixel-char').length > 0
-    )));
-    assert.deepEqual(
-      (await page.locator('.archive-topic-name').allTextContents()).sort(),
-      ['Audience Preview', 'The Moon', 'The Work'].sort()
-    );
-    await page.locator('#hide-riddle-names').check();
-    assert.equal(await page.locator('.archive-topic-name-hidden').count(), 3);
+    await audienceTitleReveal.click();
+    await page.waitForFunction((groupId) => {
+      const heading = document.querySelector(`.archive-topic[data-group-id="${groupId}"] .archive-topic-name`);
+      return heading && !heading.classList.contains('topic-name-hidden')
+        && heading.querySelectorAll('.glyph-char').length === 0;
+    }, audienceGroup.id);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const persistedAudienceSection = page.locator(`.archive-topic[data-group-id="${audienceGroup.id}"]`);
+    assert.equal(await persistedAudienceSection.locator('.archive-topic-name.topic-name-hidden').count(), 0);
+    await persistedAudienceSection.getByRole('button', { name: 'Hide title' }).click();
+    await page.waitForFunction((groupId) => {
+      const heading = document.querySelector(`.archive-topic[data-group-id="${groupId}"] .archive-topic-name`);
+      return heading && heading.classList.contains('topic-name-hidden')
+        && heading.querySelectorAll('.pixel-char').length === 0;
+    }, audienceGroup.id);
     assert.equal(await page.locator('.archive-topic .riddle-tablet').count(), 6);
     const audienceArchiveGrid = page.locator(`.archive-topic[data-group-id="${audienceGroup.id}"] .tablet-grid`);
     assert.equal(await audienceArchiveGrid.evaluate((grid) => grid.classList.contains('three-tablet-grid')), true);
