@@ -558,8 +558,10 @@ test('topic creation, submission, moderation, presentation, and local group comp
       ['Audience Preview', 'The Moon', 'The Work'].sort()
     );
     assert.equal(await page.locator('#hide-riddle-names').count(), 0);
-    assert.equal(await page.locator('.archive-topic-name.topic-name-hidden').count(), 1);
-    assert.equal(await page.locator('.archive-topic .topic-title-reveal').count(), 1);
+    assert.equal(await page.locator('.archive-topic-name.topic-name-hidden').count(), 2);
+    assert.equal(await page.locator('.archive-topic .topic-title-reveal').count(), 3);
+    assert.equal(await page.getByRole('button', { name: 'Hide title' }).count(), 1);
+    assert.equal(await page.getByRole('button', { name: 'Reveal title' }).count(), 2);
     const audienceArchiveSection = page.locator(`.archive-topic[data-group-id="${audienceGroup.id}"]`);
     const audienceTitle = audienceArchiveSection.locator('.archive-topic-name');
     const audienceTitleReveal = audienceArchiveSection.getByRole('button', { name: 'Reveal title' });

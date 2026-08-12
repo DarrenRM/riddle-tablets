@@ -844,7 +844,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             const layouts = [];
-            const solvedIds = loadSolvedGroupIds();
             const rendered = presentations.map((presentation) => {
                 const section = document.createElement('section');
                 section.className = 'topic-section archive-topic';
@@ -855,9 +854,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 heading.dataset.topicName = displayTopic(presentation.group);
                 heading.id = `archive-topic-heading-${presentation.group.id}`;
                 section.setAttribute('aria-labelledby', heading.id);
-                const headingRow = createTopicHeadingRow(heading, presentation.group, {
-                    interactive: !solvedIds.has(presentation.group.id)
-                });
+                const headingRow = createTopicHeadingRow(heading, presentation.group);
 
                 const grid = document.createElement('div');
                 grid.className = 'tablet-grid';
@@ -941,10 +938,6 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('storage', (event) => {
         if (event.key === REVEALED_TOPIC_NAMES_STORAGE_KEY) {
             syncRenderedTopicTitles();
-            return;
-        }
-        if (event.key === SOLVED_GROUP_STORAGE_KEY && mode === 'archive') {
-            renderArchive();
             return;
         }
         if ([SOLVED_GROUP_STORAGE_KEY, QUEST_PROGRESS_STORAGE_KEY].includes(event.key)
